@@ -1,0 +1,6 @@
+.env
+.DS_Store
+node_modules/
+workspace/
+.cursor-home/
+.cursor-sdk-store/

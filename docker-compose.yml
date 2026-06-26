@@ -1,0 +1,15 @@
+services:
+  cursor-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cursor-openai-proxy:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - "${CURSOR_WORKSPACE:-./workspace}:/workspace"
+      - cursor-state:/data
+
+volumes:
+  cursor-state:
