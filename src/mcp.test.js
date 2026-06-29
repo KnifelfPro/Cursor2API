@@ -161,6 +161,58 @@ test("MCP lets default model fan out to multiple agents and synthesize", async (
   assert.equal(reply.result.content[0].text, "final result");
 });
 
+test("MCP falls back to the default model when an agent model is unavailable", async () => {
+  const calls = [];
+  const mcp = createMcpProtocol({
+    apiKey: "crsr_test",
+    cwd: () => "/project",
+    listModels: async () => [{ id: "default" }, { id: "specialist" }],
+    run: async (prompt, model) => {
+      calls.push({ prompt, model });
+      if (calls.length === 1) return JSON.stringify({ mode: "delegate", model: "specialist", task: "handle it" });
+      if (model === "specialist") throw new Error("model specialist is unavailable");
+      return "fallback result";
+    },
+  });
+
+  const reply = await mcp.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: MCP_TOOL_NAME, arguments: { prompt: "handle it", model: "default" } },
+  });
+
+  assert.deepEqual(calls.map((call) => call.model), ["default", "specialist", "default"]);
+  assert.match(calls[2].prompt, /Task:\nhandle it/);
+  assert.equal(reply.result.content[0].text, "fallback result");
+  assert.equal(reply.result.isError, false);
+});
+
+test("MCP does not retry when the default model itself is unavailable", async () => {
+  const calls = [];
+  const mcp = createMcpProtocol({
+    apiKey: "crsr_test",
+    cwd: () => "/project",
+    listModels: async () => [{ id: "default" }],
+    run: async (prompt, model) => {
+      calls.push({ prompt, model });
+      if (calls.length === 1) return JSON.stringify({ mode: "self" });
+      throw new Error("model default is unavailable");
+    },
+  });
+
+  const reply = await mcp.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: MCP_TOOL_NAME, arguments: { prompt: "do it", model: "default" } },
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(reply.result.isError, true);
+  assert.match(reply.result.content[0].text, /model default is unavailable/);
+});
+
 test("createRoutingPrompt includes workflow guidance", () => {
   const prompt = createRoutingPrompt({
     task: "fix tests",

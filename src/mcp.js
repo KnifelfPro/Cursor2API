@@ -8,6 +8,7 @@ export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const MCP_TOOL_NAME = "cursor_agent";
 
 const DEFAULT_MODEL = process.env.CURSOR_MODEL || "composer-2";
+const FALLBACK_MODEL = "default";
 const MAX_PARALLEL_AGENTS = 3;
 const DEFAULT_CURSOR_STORE_DIR = fileURLToPath(new URL("../.cursor-sdk-store", import.meta.url));
 if (!process.env.CURSOR_STORE_DIR) process.env.CURSOR_STORE_DIR = DEFAULT_CURSOR_STORE_DIR;
@@ -173,6 +174,18 @@ export function createMcpProtocol({
 } = {}) {
   let clientHasRoots = false;
 
+  // ponytail: starting an agent on an unavailable model fails the run; retry once
+  // on the literal "default" model so a bad selection does not lose the task.
+  async function runWithFallback(prompt, requestedModel, apiKey, workspace) {
+    try {
+      return await run(prompt, requestedModel, apiKey, workspace);
+    } catch (error) {
+      if (requestedModel === FALLBACK_MODEL) throw error;
+      process.stderr.write(`cursor_agent: model ${requestedModel} unavailable, falling back to ${FALLBACK_MODEL}\n`);
+      return await run(prompt, FALLBACK_MODEL, apiKey, workspace);
+    }
+  }
+
   async function currentWorkspace() {
     if (clientHasRoots && requestClient) {
       try {
@@ -196,7 +209,7 @@ export function createMcpProtocol({
       const workspace = await currentWorkspace();
       const models = await listModels(apiKey);
       const tools = [MCP_TOOL];
-      const decisionText = await run(createRoutingPrompt({ task: prompt, workspace, tools, models }), defaultModel, apiKey, workspace);
+      const decisionText = await runWithFallback(createRoutingPrompt({ task: prompt, workspace, tools, models }), defaultModel, apiKey, workspace);
       const decision = routingDecision(decisionText, defaultModel, prompt, models);
 
       if (decision.mode === "parallel") {
@@ -204,14 +217,14 @@ export function createMcpProtocol({
           decision.agents.map(async (agent) => ({
             model: agent.model,
             task: agent.task,
-            result: await run(workerPrompt(agent.task), agent.model, apiKey, workspace),
+            result: await runWithFallback(workerPrompt(agent.task), agent.model, apiKey, workspace),
           })),
         );
-        return toolText(await run(synthesisPrompt(prompt, results), defaultModel, apiKey, workspace));
+        return toolText(await runWithFallback(synthesisPrompt(prompt, results), defaultModel, apiKey, workspace));
       }
 
       const selectedModel = decision.mode === "delegate" ? decision.model : defaultModel;
-      return toolText(await run(workerPrompt(decision.task), selectedModel, apiKey, workspace));
+      return toolText(await runWithFallback(workerPrompt(decision.task), selectedModel, apiKey, workspace));
     } catch (error) {
       return toolError(error.message || "Cursor agent failed");
     }
