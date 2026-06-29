@@ -269,7 +269,7 @@ async function retrieveAnthropicModel(id, apiKey) {
   return anthropicModelResponse(model);
 }
 
-async function handleChatCompletions(req, res, apiKey) {
+async function handleChatCompletions(req, res, apiKey, reqId) {
   const body = await readJson(req);
   if (!Array.isArray(body.messages)) throw httpError(400, "messages must be an array");
 
@@ -278,6 +278,7 @@ async function handleChatCompletions(req, res, apiKey) {
 
   const model = typeof body.model === "string" && body.model ? body.model : DEFAULT_MODEL;
   const id = `chatcmpl-${randomUUID()}`;
+  log(reqId, "input", { endpoint: "chat/completions", model, stream: !!body.stream, messages: body.messages.length, sessionId: id });
   const created = Math.floor(Date.now() / 1000);
   const hasTools = (Array.isArray(body.tools) && body.tools.length > 0) ||
                    (Array.isArray(body.functions) && body.functions.length > 0);
@@ -335,7 +336,7 @@ async function handleChatCompletions(req, res, apiKey) {
   );
 }
 
-async function handleAnthropicMessages(req, res, apiKey) {
+async function handleAnthropicMessages(req, res, apiKey, reqId) {
   const body = await readJson(req);
   if (!Array.isArray(body.messages)) throw httpError(400, "messages must be an array");
 
@@ -344,6 +345,7 @@ async function handleAnthropicMessages(req, res, apiKey) {
 
   const model = typeof body.model === "string" && body.model ? body.model : DEFAULT_MODEL;
   const id = `msg_${randomUUID()}`;
+  log(reqId, "input", { endpoint: "messages", model, stream: !!body.stream, messages: body.messages.length, sessionId: id });
 
   if (body.stream) {
     sendSseHeaders(res);
@@ -379,13 +381,14 @@ async function handleAnthropicTokenCount(req, res) {
   sendJson(res, 200, anthropicTokenCount(await readJson(req)));
 }
 
-async function handleCompletions(req, res, apiKey) {
+async function handleCompletions(req, res, apiKey, reqId) {
   const body = await readJson(req);
   const prompt = completionPrompt(body.prompt);
   if (!prompt) throw httpError(400, "prompt must contain text");
 
   const model = typeof body.model === "string" && body.model ? body.model : DEFAULT_MODEL;
   const id = `cmpl-${randomUUID()}`;
+  log(reqId, "input", { endpoint: "completions", model, stream: !!body.stream, sessionId: id });
   const created = Math.floor(Date.now() / 1000);
 
   if (body.stream) {
@@ -411,13 +414,14 @@ async function handleCompletions(req, res, apiKey) {
   );
 }
 
-async function handleResponses(req, res, apiKey) {
+async function handleResponses(req, res, apiKey, reqId) {
   const body = await readJson(req);
   const prompt = responseInputToPrompt(body.input);
   if (!prompt) throw httpError(400, "input must contain text");
 
   const model = typeof body.model === "string" && body.model ? body.model : DEFAULT_MODEL;
   const id = `resp_${randomUUID()}`;
+  log(reqId, "input", { endpoint: "responses", model, stream: !!body.stream, sessionId: id });
   const created = Math.floor(Date.now() / 1000);
 
   if (body.stream) {
@@ -465,9 +469,16 @@ function unsupportedEndpoint(pathname) {
   );
 }
 
+function log(reqId, msg, extra) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), reqId, msg, ...extra }));
+}
+
 export function createProxyServer() {
   return createServer(async (req, res) => {
     let anthropicRequest = false;
+    const reqId = randomUUID();
+    const t0 = Date.now();
+    res.on("finish", () => log(reqId, "done", { method: req.method, path: req.url, status: res.statusCode, ms: Date.now() - t0 }));
     try {
       if (req.method === "OPTIONS") {
         addBaseHeaders(res);
@@ -509,7 +520,7 @@ export function createProxyServer() {
       }
 
       if (req.method === "POST" && url.pathname === "/v1/messages") {
-        await handleAnthropicMessages(req, res, requireAnthropicApiKey(req));
+        await handleAnthropicMessages(req, res, requireAnthropicApiKey(req), reqId);
         return;
       }
 
@@ -553,17 +564,17 @@ export function createProxyServer() {
       }
 
       if (req.method === "POST" && url.pathname === "/v1/chat/completions") {
-        await handleChatCompletions(req, res, apiKey);
+        await handleChatCompletions(req, res, apiKey, reqId);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/v1/completions") {
-        await handleCompletions(req, res, apiKey);
+        await handleCompletions(req, res, apiKey, reqId);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/v1/responses") {
-        await handleResponses(req, res, apiKey);
+        await handleResponses(req, res, apiKey, reqId);
         return;
       }
 
@@ -585,6 +596,7 @@ export function createProxyServer() {
 
       sendJson(res, 404, openAiError("Not found", "invalid_request_error", "not_found"));
     } catch (error) {
+      log(reqId, "error", { message: error.message, status: error.statusCode || 500 });
       if (anthropicRequest) sendAnthropicError(res, error);
       else sendError(res, error);
     }
