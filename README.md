@@ -74,6 +74,66 @@ curl http://localhost:3000/v1/messages \
 Anthropic requests may use `x-api-key: <cursor-api-key>` or the same bearer
 token header.
 
+### MCP (stdio)
+
+Install locally, then configure the MCP client to run the stdio server and pass
+your Cursor key in the client-side environment:
+
+```bash
+npm install -g /path/to/Cursor2Api
+```
+
+```json
+{
+  "mcpServers": {
+    "cursor-agent": {
+      "command": "cursor2api-mcp",
+      "env": {
+        "CURSOR_API_KEY": "crsr_xxx"
+      }
+    }
+  }
+}
+```
+
+For development, you can also point the client directly at the checkout:
+
+```json
+{
+  "mcpServers": {
+    "cursor-agent": {
+      "command": "node",
+      "args": ["/path/to/Cursor2Api/src/mcp.js"],
+      "env": {
+        "CURSOR_API_KEY": "crsr_xxx"
+      }
+    }
+  }
+}
+```
+
+The MCP server exposes one tool, `cursor_agent`. On each tool call it asks the
+client for MCP roots and uses the first `file://` root as the Cursor workspace.
+If the client does not support roots, it falls back to the MCP server process
+current working directory.
+
+Tool input:
+
+```json
+{
+  "prompt": "Fix the failing tests in the current project",
+  "model": "composer-2"
+}
+```
+
+`prompt` is required. `model` is optional and selects the default routing model.
+
+For every task, the MCP server fetches the Cursor model list, sends that list,
+the MCP tool list, the workspace, and the task to the default model, then lets
+that model choose `self`, `delegate`, or up to three parallel model agents.
+Superpowers and Ponytail are included as local prompt guidance; no server-side
+runtime is required.
+
 ### Retrieving generated files (remote server)
 
 When the proxy runs on a remote server, files created by the Cursor agent stay
@@ -111,6 +171,12 @@ Supported endpoints:
 - `POST /v1/embeddings`
 
 Streaming works with `"stream": true` for the three text endpoints.
+
+MCP:
+
+- stdio server: `npm run mcp`
+- local npm bin: `cursor2api-mcp`
+- tool: `cursor_agent`
 
 Anthropic-compatible endpoints:
 

@@ -72,6 +72,63 @@ curl http://localhost:3000/v1/messages \
 Anthropic 请求可以使用 `x-api-key: <cursor-api-key>`，也可以使用同样的
 bearer token header。
 
+### MCP（stdio）
+
+先本地安装，然后在 MCP 客户端里配置 stdio server，并把 Cursor key 放在客户端环境变量里：
+
+```bash
+npm install -g /path/to/Cursor2Api
+```
+
+```json
+{
+  "mcpServers": {
+    "cursor-agent": {
+      "command": "cursor2api-mcp",
+      "env": {
+        "CURSOR_API_KEY": "crsr_xxx"
+      }
+    }
+  }
+}
+```
+
+开发时也可以直接指向当前 checkout：
+
+```json
+{
+  "mcpServers": {
+    "cursor-agent": {
+      "command": "node",
+      "args": ["/path/to/Cursor2Api/src/mcp.js"],
+      "env": {
+        "CURSOR_API_KEY": "crsr_xxx"
+      }
+    }
+  }
+}
+```
+
+MCP server 暴露一个 `cursor_agent` 工具。每次工具调用时，它会向客户端请求
+MCP roots，并把第一个 `file://` root 作为 Cursor workspace。若客户端不支持
+roots，则回退到 MCP server 进程的当前工作目录。
+
+工具入参：
+
+```json
+{
+  "prompt": "修复当前项目里失败的测试",
+  "model": "composer-2"
+}
+```
+
+`prompt` 必填。`model` 可选，用来指定 default 路由模型。
+
+每次任务调用时，MCP server 会获取 Cursor 模型列表，把模型列表、MCP 工具列表、
+workspace 和任务一起发给 default 模型，由 default 决定 `self`、`delegate`
+或最多 3 个并行模型 agent。Superpowers 和 Ponytail 作为本地 prompt 规则集成，
+不需要额外服务器运行时。
+
 ### 获取远程服务器生成的文件
 
 代理运行在远程服务器上时，Cursor agent 创建的文件会留在服务器上。
@@ -109,6 +166,12 @@ done
 - `POST /v1/embeddings`
 
 三个文本接口都支持 `"stream": true` 流式输出。
+
+MCP：
+
+- stdio server：`npm run mcp`
+- 本地 npm bin：`cursor2api-mcp`
+- 工具：`cursor_agent`
 
 Anthropic 兼容接口：
 

@@ -168,14 +168,14 @@ async function readJson(req) {
   }
 }
 
-async function createCursorAgent(model, apiKey, store) {
+async function createCursorAgent(model, apiKey, store, cwd = WORKSPACE_DIR) {
   if (CURSOR_HOME_DIR) process.env.HOME = CURSOR_HOME_DIR;
   // ponytail: local-only agent runtime; add cloud options when PR automation is needed.
   return Agent.create({
     apiKey,
     model: { id: model },
     local: {
-      cwd: WORKSPACE_DIR,
+      cwd,
       store,
     },
   });
@@ -193,14 +193,14 @@ function listWorkspaceFiles(dir = WORKSPACE_DIR, base = WORKSPACE_DIR) {
   return files;
 }
 
-async function runCursorText(prompt, model, apiKey) {
+export async function runCursorText(prompt, model, apiKey, cwd = WORKSPACE_DIR) {
   if (activeRequests >= MAX_CONCURRENT) throw httpError(503, "Too many concurrent requests", "server_error");
   activeRequests++;
   const storeDir = join(CURSOR_STORE_DIR, randomUUID());
   let agent;
   const timer = setTimeout(() => agent?.close(), REQUEST_TIMEOUT_MS);
   try {
-    agent = await createCursorAgent(model, apiKey, new JsonlLocalAgentStore(storeDir));
+    agent = await createCursorAgent(model, apiKey, new JsonlLocalAgentStore(storeDir), cwd);
     const run = await agent.send(prompt);
     const result = await run.wait();
     if (result.status !== "finished") throw httpError(502, `Cursor run ended with status ${result.status}`, "server_error");

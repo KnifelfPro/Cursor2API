@@ -4,7 +4,24 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "cursor2api-mcp": "src/mcp.js"
+  },
+  "files": [
+    "src/anthropic.js",
+    "src/mcp.js",
+    "src/openai.js",
+    "src/server.js",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "Dockerfile",
+    "docker-compose.yml",
+    ".dockerignore",
+    ".env.example"
+  ],
   "scripts": {
+    "mcp": "node src/mcp.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "test": "node --test src/*.test.js"
   },
