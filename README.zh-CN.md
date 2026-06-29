@@ -2,6 +2,8 @@
 
 基于 Cursor SDK 的 OpenAI 与 Anthropic 兼容代理。
 
+本项目受 Cursor cookbook 启发：https://github.com/cursor/cookbook。
+
 [English README](README.md)
 
 ## 运行
@@ -74,7 +76,9 @@ bearer token header。
 
 ### MCP（stdio）
 
-先从 npm 安装，然后在 MCP 客户端里配置 stdio server，并把 Cursor key 放在客户端环境变量里：
+第 1 步：在 https://cursor.com/dashboard/api?section=user-keys#user-api-keys 获取 Cursor API key。
+
+然后从 npm 安装，在 MCP 客户端里配置 stdio server，并把 Cursor key 放在客户端环境变量里：
 
 ```bash
 npm install -g cursor2api-mcp

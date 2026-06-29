@@ -2,6 +2,8 @@
 
 OpenAI- and Anthropic-compatible wrapper around Cursor SDK.
 
+Inspired by Cursor's cookbook: https://github.com/cursor/cookbook.
+
 [中文文档](README.zh-CN.md)
 
 ## Run
@@ -76,7 +78,10 @@ token header.
 
 ### MCP (stdio)
 
-Install from npm, then configure the MCP client to run the stdio server and
+Step 1: get a Cursor API key from
+https://cursor.com/dashboard/api?section=user-keys#user-api-keys.
+
+Then install from npm, configure the MCP client to run the stdio server, and
 pass your Cursor key in the client-side environment:
 
 ```bash
