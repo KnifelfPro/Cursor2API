@@ -76,11 +76,11 @@ token header.
 
 ### MCP (stdio)
 
-Install locally, then configure the MCP client to run the stdio server and pass
-your Cursor key in the client-side environment:
+Install from npm, then configure the MCP client to run the stdio server and
+pass your Cursor key in the client-side environment:
 
 ```bash
-npm install -g /path/to/Cursor2Api
+npm install -g cursor2api-mcp
 ```
 
 ```json
@@ -97,6 +97,12 @@ npm install -g /path/to/Cursor2Api
 ```
 
 For development, you can also point the client directly at the checkout:
+
+```bash
+git clone https://github.com/KnifelfPro/Cursor2API.git
+cd Cursor2API
+npm install
+```
 
 ```json
 {

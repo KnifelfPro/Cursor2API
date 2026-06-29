@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -302,6 +303,16 @@ export function startMcpStdio() {
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isMainEntry(argvPath, moduleUrl, realpath = realpathSync) {
+  if (!argvPath) return false;
+
+  try {
+    return moduleUrl === pathToFileURL(realpath(argvPath)).href;
+  } catch {
+    return moduleUrl === pathToFileURL(argvPath).href;
+  }
+}
+
+if (isMainEntry(process.argv[1], import.meta.url)) {
   startMcpStdio();
 }

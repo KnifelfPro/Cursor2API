@@ -74,10 +74,10 @@ bearer token header。
 
 ### MCP（stdio）
 
-先本地安装，然后在 MCP 客户端里配置 stdio server，并把 Cursor key 放在客户端环境变量里：
+先从 npm 安装，然后在 MCP 客户端里配置 stdio server，并把 Cursor key 放在客户端环境变量里：
 
 ```bash
-npm install -g /path/to/Cursor2Api
+npm install -g cursor2api-mcp
 ```
 
 ```json
@@ -94,6 +94,12 @@ npm install -g /path/to/Cursor2Api
 ```
 
 开发时也可以直接指向当前 checkout：
+
+```bash
+git clone https://github.com/KnifelfPro/Cursor2API.git
+cd Cursor2API
+npm install
+```
 
 ```json
 {

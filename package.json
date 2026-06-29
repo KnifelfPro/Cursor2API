@@ -1,9 +1,11 @@
 {
-  "name": "cursor-openai-proxy",
-  "version": "0.1.0",
-  "private": true,
+  "name": "cursor2api-mcp",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "cursor2api-mcp": "src/mcp.js"
   },

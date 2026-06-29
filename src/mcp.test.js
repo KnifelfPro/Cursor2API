@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { createMcpProtocol, createRoutingPrompt, MCP_PROTOCOL_VERSION, MCP_TOOL_NAME } from "./mcp.js";
+import { createMcpProtocol, createRoutingPrompt, isMainEntry, MCP_PROTOCOL_VERSION, MCP_TOOL_NAME } from "./mcp.js";
 
 test("MCP initialize advertises tools capability", async () => {
   const mcp = createMcpProtocol();
@@ -174,6 +174,15 @@ test("createRoutingPrompt includes workflow guidance", () => {
   assert.match(prompt, /"workspace":"\/tmp\/project"/);
 });
 
+test("isMainEntry accepts npm bin symlinks", () => {
+  const realPath = "/package/src/mcp.js";
+  const binPath = "/prefix/bin/cursor2api-mcp";
+  const moduleUrl = new URL(`file://${realPath}`).href;
+  const realpath = (value) => (value === binPath ? realPath : value);
+
+  assert.equal(isMainEntry(binPath, moduleUrl, realpath), true);
+});
+
 test("MCP tool calls require a configured key", async () => {
   const mcp = createMcpProtocol({ apiKey: "" });
   const reply = await mcp.handle({
@@ -189,6 +198,9 @@ test("MCP tool calls require a configured key", async () => {
 
 test("package exposes a local npm MCP bin", async () => {
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.name, "cursor2api-mcp");
+  assert.equal(pkg.private, undefined);
+  assert.deepEqual(pkg.publishConfig, { access: "public" });
   assert.equal(pkg.bin["cursor2api-mcp"], "src/mcp.js");
   assert.deepEqual(pkg.files, [
     "src/anthropic.js",
