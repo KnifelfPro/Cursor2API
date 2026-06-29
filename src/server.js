@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -51,8 +51,9 @@ const CURSOR_HOME_DIR = process.env.CURSOR_HOME_DIR
   : process.env.CODEX_SANDBOX
     ? resolve(".cursor-home")
     : "";
-const cursorStore = new JsonlLocalAgentStore(CURSOR_STORE_DIR);
-let cursorQueue = Promise.resolve();
+const MAX_CONCURRENT = Number.parseInt(process.env.MAX_CONCURRENT || "10", 10);
+const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.REQUEST_TIMEOUT_MS || "300000", 10);
+let activeRequests = 0;
 
 function httpError(statusCode, message, type = "invalid_request_error") {
   const error = new Error(message);
@@ -167,7 +168,7 @@ async function readJson(req) {
   }
 }
 
-async function createCursorAgent(model, apiKey) {
+async function createCursorAgent(model, apiKey, store) {
   if (CURSOR_HOME_DIR) process.env.HOME = CURSOR_HOME_DIR;
   // ponytail: local-only agent runtime; add cloud options when PR automation is needed.
   return Agent.create({
@@ -175,7 +176,7 @@ async function createCursorAgent(model, apiKey) {
     model: { id: model },
     local: {
       cwd: WORKSPACE_DIR,
-      store: cursorStore,
+      store,
     },
   });
 }
@@ -192,49 +193,48 @@ function listWorkspaceFiles(dir = WORKSPACE_DIR, base = WORKSPACE_DIR) {
   return files;
 }
 
-async function withCursorQueue(work) {
-  // ponytail: global queue avoids local SDK store races; use per-request stores if throughput matters.
-  const result = cursorQueue.then(work, work);
-  cursorQueue = result.catch(() => {});
-  return result;
-}
-
 async function runCursorText(prompt, model, apiKey) {
-  return withCursorQueue(async () => {
-    const agent = await createCursorAgent(model, apiKey);
-
-    try {
-      const run = await agent.send(prompt);
-      const result = await run.wait();
-      if (result.status !== "finished") {
-        throw httpError(502, `Cursor run ended with status ${result.status}`, "server_error");
-      }
-      return result.result || "";
-    } finally {
-      agent.close();
-    }
-  });
+  if (activeRequests >= MAX_CONCURRENT) throw httpError(503, "Too many concurrent requests", "server_error");
+  activeRequests++;
+  const storeDir = join(CURSOR_STORE_DIR, randomUUID());
+  let agent;
+  const timer = setTimeout(() => agent?.close(), REQUEST_TIMEOUT_MS);
+  try {
+    agent = await createCursorAgent(model, apiKey, new JsonlLocalAgentStore(storeDir));
+    const run = await agent.send(prompt);
+    const result = await run.wait();
+    if (result.status !== "finished") throw httpError(502, `Cursor run ended with status ${result.status}`, "server_error");
+    return result.result || "";
+  } finally {
+    clearTimeout(timer);
+    agent?.close();
+    activeRequests--;
+    rmSync(storeDir, { recursive: true, force: true });
+  }
 }
 
 async function streamCursorText(prompt, model, apiKey, onDelta) {
-  return withCursorQueue(async () => {
-    const agent = await createCursorAgent(model, apiKey);
-
-    try {
-      const run = await agent.send(prompt);
-      let emittedText = "";
-
-      for await (const event of run.stream()) {
-        const next = assistantDelta(event, emittedText);
-        if (!next.delta) continue;
-
-        emittedText = next.text;
-        onDelta(next.delta);
-      }
-    } finally {
-      agent.close();
+  if (activeRequests >= MAX_CONCURRENT) throw httpError(503, "Too many concurrent requests", "server_error");
+  activeRequests++;
+  const storeDir = join(CURSOR_STORE_DIR, randomUUID());
+  let agent;
+  const timer = setTimeout(() => agent?.close(), REQUEST_TIMEOUT_MS);
+  try {
+    agent = await createCursorAgent(model, apiKey, new JsonlLocalAgentStore(storeDir));
+    const run = await agent.send(prompt);
+    let emittedText = "";
+    for await (const event of run.stream()) {
+      const next = assistantDelta(event, emittedText);
+      if (!next.delta) continue;
+      emittedText = next.text;
+      onDelta(next.delta);
     }
-  });
+  } finally {
+    clearTimeout(timer);
+    agent?.close();
+    activeRequests--;
+    rmSync(storeDir, { recursive: true, force: true });
+  }
 }
 
 async function cursorModels(apiKey) {
