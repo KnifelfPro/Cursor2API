@@ -2,6 +2,8 @@
 
 OpenAI- and Anthropic-compatible wrapper around Cursor SDK.
 
+[中文文档](README.zh-CN.md)
+
 ## Run
 
 ### Docker (recommended)
@@ -140,3 +142,7 @@ All other `/v1/*` OpenAI endpoints return an OpenAI-shaped `not_supported`
 error with HTTP 501. Cursor SDK can run agent text tasks, but it cannot provide
 real OpenAI equivalents for images, audio, files, batches, fine-tuning, vector
 stores, realtime, or administration APIs.
+
+## License
+
+This project is fully open under the MIT License. See [LICENSE](LICENSE).

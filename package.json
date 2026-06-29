@@ -2,6 +2,7 @@
   "name": "cursor-openai-proxy",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
