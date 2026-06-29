@@ -1,15 +1,19 @@
 {
   "name": "cursor2api-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "cursor2api-mcp": "src/mcp.js"
+    "cursor2api-mcp": "src/mcp.js",
+    "cursor2api-mcp-install": "scripts/install-mcp.mjs"
   },
   "files": [
+    "scripts/install-mcp.cmd",
+    "scripts/install-mcp.mjs",
+    "scripts/install-mcp.sh",
     "src/anthropic.js",
     "src/mcp.js",
     "src/openai.js",
@@ -25,7 +29,7 @@
   "scripts": {
     "mcp": "node src/mcp.js",
     "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --test src/*.test.js"
+    "test": "node --test src/*.test.js scripts/*.test.js"
   },
   "dependencies": {
     "@cursor/sdk": "1.0.21"

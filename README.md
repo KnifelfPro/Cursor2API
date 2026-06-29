@@ -83,6 +83,22 @@ pass your Cursor key in the client-side environment:
 npm install -g cursor2api-mcp
 ```
 
+One-command installer for macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/install-mcp.sh | sh
+```
+
+Windows `cmd` installer:
+
+```cmd
+curl -L -o install-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/install-mcp.cmd && install-mcp.cmd
+```
+
+The installers ask for your Cursor API key, scan common Codex, Clash, OpenCode,
+Cursor, and Gemini config locations, then let you install to one target or many
+with input like `1`, `1,3,5`, `cursor gemini`, or `all`.
+
 ```json
 {
   "mcpServers": {

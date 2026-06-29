@@ -202,7 +202,11 @@ test("package exposes a local npm MCP bin", async () => {
   assert.equal(pkg.private, undefined);
   assert.deepEqual(pkg.publishConfig, { access: "public" });
   assert.equal(pkg.bin["cursor2api-mcp"], "src/mcp.js");
+  assert.equal(pkg.bin["cursor2api-mcp-install"], "scripts/install-mcp.mjs");
   assert.deepEqual(pkg.files, [
+    "scripts/install-mcp.cmd",
+    "scripts/install-mcp.mjs",
+    "scripts/install-mcp.sh",
     "src/anthropic.js",
     "src/mcp.js",
     "src/openai.js",

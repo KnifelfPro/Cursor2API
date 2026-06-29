@@ -80,6 +80,22 @@ bearer token header。
 npm install -g cursor2api-mcp
 ```
 
+macOS/Linux 一键安装：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/install-mcp.sh | sh
+```
+
+Windows `cmd` 一键安装：
+
+```cmd
+curl -L -o install-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/install-mcp.cmd && install-mcp.cmd
+```
+
+安装脚本会询问 Cursor API key，扫描常见 Codex、Clash、OpenCode、Cursor、
+Gemini 配置目录，然后允许输入 `1`、`1,3,5`、`cursor gemini` 或 `all`
+来单选或批量安装。
+
 ```json
 {
   "mcpServers": {
