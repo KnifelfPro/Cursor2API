@@ -5,13 +5,13 @@ import { dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
-const SERVER_NAME = "cursor2api";
+export const SERVER_NAME = "cursor2api";
 const JSON_SERVER = {
   command: "cursor2api-mcp",
   args: [],
 };
-const CODEX_START = "# cursor2api-mcp:start";
-const CODEX_END = "# cursor2api-mcp:end";
+export const CODEX_START = "# cursor2api-mcp:start";
+export const CODEX_END = "# cursor2api-mcp:end";
 
 function homePath(...parts) {
   return join(process.env.HOME || process.env.USERPROFILE || ".", ...parts);

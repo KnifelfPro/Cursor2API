@@ -109,6 +109,24 @@ Gemini 配置目录，然后允许输入 `1`、`1,3,5`、`cursor gemini` 或 `al
 }
 ```
 
+一键卸载：从 MCP 客户端配置中移除 `cursor2api` 并卸载全局包。
+
+macOS/Linux：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/uninstall-mcp.sh | sh
+```
+
+Windows `cmd`：
+
+```cmd
+curl -L -o uninstall-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/uninstall-mcp.cmd && uninstall-mcp.cmd
+```
+
+卸载脚本会扫描相同的 Codex、Clash、OpenCode、Cursor、Gemini 配置目录，从你选择的
+目标里移除 `cursor2api` 条目（会先写 `.bak` 备份），然后执行
+`npm uninstall -g cursor2api-mcp`。
+
 开发时也可以直接指向当前 checkout：
 
 ```bash

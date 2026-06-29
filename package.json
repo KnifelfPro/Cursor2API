@@ -1,6 +1,6 @@
 {
   "name": "cursor2api-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "type": "module",
   "publishConfig": {
@@ -8,12 +8,16 @@
   },
   "bin": {
     "cursor2api-mcp": "src/mcp.js",
-    "cursor2api-mcp-install": "scripts/install-mcp.mjs"
+    "cursor2api-mcp-install": "scripts/install-mcp.mjs",
+    "cursor2api-mcp-uninstall": "scripts/uninstall-mcp.mjs"
   },
   "files": [
     "scripts/install-mcp.cmd",
     "scripts/install-mcp.mjs",
     "scripts/install-mcp.sh",
+    "scripts/uninstall-mcp.cmd",
+    "scripts/uninstall-mcp.mjs",
+    "scripts/uninstall-mcp.sh",
     "src/anthropic.js",
     "src/mcp.js",
     "src/openai.js",

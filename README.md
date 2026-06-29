@@ -112,6 +112,25 @@ with input like `1`, `1,3,5`, `cursor gemini`, or `all`.
 }
 ```
 
+To remove `cursor2api` from your MCP clients and uninstall the global package,
+use the one-command uninstaller.
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/uninstall-mcp.sh | sh
+```
+
+Windows `cmd`:
+
+```cmd
+curl -L -o uninstall-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/uninstall-mcp.cmd && uninstall-mcp.cmd
+```
+
+The uninstaller scans the same Codex, Clash, OpenCode, Cursor, and Gemini config
+locations, removes the `cursor2api` entry from the targets you select (writing a
+`.bak` first), then runs `npm uninstall -g cursor2api-mcp`.
+
 For development, you can also point the client directly at the checkout:
 
 ```bash
