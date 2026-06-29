@@ -1,0 +1,87 @@
+export const SUPERPOWERS_FLOW = [
+  "Explore project context before changing behavior.",
+  "Write or update the smallest useful test before non-trivial implementation.",
+  "Implement in small verifiable steps.",
+  "Verify before claiming completion.",
+].join(" ");
+
+export const PONYTAIL_RULES = [
+  "Use the laziest solution that actually works.",
+  "Reuse existing code and standard library before adding abstractions.",
+  "Keep the diff small, avoid speculative scaffolding, and cap fanout.",
+].join(" ");
+
+const MAX_PARALLEL_AGENTS = 3;
+
+export function createRoutingPrompt({ task, workspace, tools, models }) {
+  return [
+    "You are the default model for a local MCP Cursor agent router.",
+    "Choose whether to handle the task yourself, delegate to one listed model, or fan out to multiple listed models.",
+    "Return valid JSON only.",
+    'Schema: {"mode":"self|delegate|parallel","model":"model-id","task":"worker task","agents":[{"model":"model-id","task":"worker task"}]}',
+    `Superpowers workflow: ${SUPERPOWERS_FLOW}`,
+    `Ponytail rules: ${PONYTAIL_RULES}`,
+    `Context: ${JSON.stringify({ workspace, models, tools, task })}`,
+  ].join("\n");
+}
+
+export function workerPrompt(task) {
+  return [`Superpowers workflow: ${SUPERPOWERS_FLOW}`, `Ponytail rules: ${PONYTAIL_RULES}`, `Task:\n${task}`].join("\n\n");
+}
+
+export function synthesisPrompt(task, results) {
+  return workerPrompt(
+    [
+      "Synthesize the final answer for the original task.",
+      `Original task: ${task}`,
+      `Agent results: ${JSON.stringify(results)}`,
+    ].join("\n"),
+  );
+}
+
+export function parseJsonObject(text) {
+  const raw = String(text || "").trim();
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+  const candidates = [raw, fenced?.[1]].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+
+  return null;
+}
+
+export function modelId(model) {
+  return typeof model === "string" ? model : model?.id;
+}
+
+export function knownModel(model, modelIds, fallback) {
+  return modelIds.has(model) ? model : fallback;
+}
+
+export function routingDecision(text, defaultModel, task, models) {
+  const parsed = parseJsonObject(text);
+  const modelIds = new Set(models.map(modelId).filter(Boolean));
+  const fallback = knownModel(defaultModel, modelIds, defaultModel);
+
+  if (parsed?.mode === "delegate") {
+    return {
+      mode: "delegate",
+      model: knownModel(parsed.model, modelIds, fallback),
+      task: typeof parsed.task === "string" && parsed.task.trim() ? parsed.task.trim() : task,
+    };
+  }
+
+  if (parsed?.mode === "parallel" && Array.isArray(parsed.agents) && parsed.agents.length) {
+    const agents = parsed.agents.slice(0, MAX_PARALLEL_AGENTS).map((agent) => ({
+      model: knownModel(agent?.model, modelIds, fallback),
+      task: typeof agent?.task === "string" && agent.task.trim() ? agent.task.trim() : task,
+    }));
+    return { mode: "parallel", agents };
+  }
+
+  return { mode: "self", model: fallback, task };
+}
