@@ -29,7 +29,20 @@ export function messagesToPrompt(messages) {
   return messages
     .map((message) => {
       const role = message?.role || "user";
-      const text = contentToText(message?.content).trim();
+      let text = contentToText(message?.content).trim();
+
+      // assistant turn that only has tool_calls (no text)
+      if (!text && Array.isArray(message?.tool_calls) && message.tool_calls.length) {
+        text = message.tool_calls
+          .map((tc) => `called ${tc.function?.name}(${tc.function?.arguments})`)
+          .join(", ");
+      }
+
+      // tool result turn
+      if (role === "tool" && message?.tool_call_id) {
+        return `tool_result(${message.tool_call_id}): ${text}`;
+      }
+
       return text ? `${role}: ${text}` : "";
     })
     .filter(Boolean)
@@ -121,19 +134,60 @@ export function tokenUsage(prompt, completion) {
   };
 }
 
-export function chatCompletionResponse({ id, created, model, content, prompt = "" }) {
+// Parse JSON tool_calls or function_call the model embedded in its text response.
+// Tries the raw text, then a ```json ... ``` fence.
+export function extractToolCalls(content) {
+  if (!content) return null;
+  const candidates = [content.trim()];
+  const fenced = content.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+  if (fenced) candidates.push(fenced[1].trim());
+  for (const c of candidates) {
+    try {
+      const p = JSON.parse(c);
+      if (Array.isArray(p?.tool_calls) && p.tool_calls.length) return p;
+      if (p?.function_call?.name) return p;
+    } catch {}
+  }
+  return null;
+}
+
+function formatArgs(args) {
+  return typeof args === "string" ? args : JSON.stringify(args ?? {});
+}
+
+export function chatCompletionResponse({ id, created, model, content, prompt = "", hasTools = false }) {
+  const parsed = hasTools ? extractToolCalls(content) : null;
+  let message, finishReason;
+
+  if (parsed?.tool_calls) {
+    message = {
+      role: "assistant",
+      content: null,
+      tool_calls: parsed.tool_calls.map((tc, i) => ({
+        id: `call_${id}_${i}`,
+        type: "function",
+        function: { name: tc.name, arguments: formatArgs(tc.arguments) },
+      })),
+    };
+    finishReason = "tool_calls";
+  } else if (parsed?.function_call) {
+    message = {
+      role: "assistant",
+      content: null,
+      function_call: { name: parsed.function_call.name, arguments: formatArgs(parsed.function_call.arguments) },
+    };
+    finishReason = "function_call";
+  } else {
+    message = { role: "assistant", content };
+    finishReason = "stop";
+  }
+
   return {
     id,
     object: "chat.completion",
     created,
     model,
-    choices: [
-      {
-        index: 0,
-        message: { role: "assistant", content },
-        finish_reason: "stop",
-      },
-    ],
+    choices: [{ index: 0, message, finish_reason: finishReason }],
     usage: tokenUsage(prompt, content),
   };
 }

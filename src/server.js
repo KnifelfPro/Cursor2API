@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { Agent, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
@@ -31,6 +32,7 @@ import {
   completionResponse,
   cursorModelsToOpenAi,
   embeddingsResponse,
+  extractToolCalls,
   openAiModel,
   openAiError,
   responseInputToPrompt,
@@ -43,6 +45,7 @@ const DEFAULT_EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "text-embedding-3
 const DEFAULT_EMBEDDING_DIMENSIONS = Number.parseInt(process.env.EMBEDDING_DIMENSIONS || "1536", 10);
 const BODY_LIMIT = Number.parseInt(process.env.MAX_BODY_BYTES || "1048576", 10);
 const CURSOR_STORE_DIR = resolve(process.env.CURSOR_STORE_DIR || ".cursor-sdk-store");
+const WORKSPACE_DIR = resolve(process.env.CURSOR_WORKDIR || process.cwd());
 const CURSOR_HOME_DIR = process.env.CURSOR_HOME_DIR
   ? resolve(process.env.CURSOR_HOME_DIR)
   : process.env.CODEX_SANDBOX
@@ -171,10 +174,22 @@ async function createCursorAgent(model, apiKey) {
     apiKey,
     model: { id: model },
     local: {
-      cwd: process.env.CURSOR_WORKDIR || process.cwd(),
+      cwd: WORKSPACE_DIR,
       store: cursorStore,
     },
   });
+}
+
+function listWorkspaceFiles(dir = WORKSPACE_DIR, base = WORKSPACE_DIR) {
+  const files = [];
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) files.push(...listWorkspaceFiles(full, base));
+      else files.push(relative(base, full));
+    }
+  } catch {}
+  return files;
 }
 
 async function withCursorQueue(work) {
@@ -264,16 +279,44 @@ async function handleChatCompletions(req, res, apiKey) {
   const model = typeof body.model === "string" && body.model ? body.model : DEFAULT_MODEL;
   const id = `chatcmpl-${randomUUID()}`;
   const created = Math.floor(Date.now() / 1000);
+  const hasTools = (Array.isArray(body.tools) && body.tools.length > 0) ||
+                   (Array.isArray(body.functions) && body.functions.length > 0);
 
   if (body.stream) {
     sendSseHeaders(res);
-    writeSse(res, chatCompletionChunk({ id, created, model, delta: { role: "assistant" } }));
 
-    await streamCursorText(prompt, model, apiKey, (delta) => {
-      writeSse(res, chatCompletionChunk({ id, created, model, delta: { content: delta } }));
-    });
+    if (hasTools) {
+      // Buffer the full response so we can detect and emit tool_calls in proper streaming format.
+      let fullContent = "";
+      writeSse(res, chatCompletionChunk({ id, created, model, delta: { role: "assistant", content: null } }));
+      await streamCursorText(prompt, model, apiKey, (delta) => { fullContent += delta; });
 
-    writeSse(res, chatCompletionChunk({ id, created, model, delta: {}, finishReason: "stop" }));
+      const parsed = extractToolCalls(fullContent);
+      if (parsed?.tool_calls) {
+        const calls = parsed.tool_calls.map((tc, i) => ({
+          index: i,
+          id: `call_${id}_${i}`,
+          type: "function",
+          function: { name: tc.name, arguments: "" },
+        }));
+        writeSse(res, chatCompletionChunk({ id, created, model, delta: { tool_calls: calls } }));
+        for (const [i, tc] of parsed.tool_calls.entries()) {
+          const args = typeof tc.arguments === "string" ? tc.arguments : JSON.stringify(tc.arguments ?? {});
+          writeSse(res, chatCompletionChunk({ id, created, model, delta: { tool_calls: [{ index: i, function: { arguments: args } }] } }));
+        }
+        writeSse(res, chatCompletionChunk({ id, created, model, delta: {}, finishReason: "tool_calls" }));
+      } else {
+        writeSse(res, chatCompletionChunk({ id, created, model, delta: { content: fullContent } }));
+        writeSse(res, chatCompletionChunk({ id, created, model, delta: {}, finishReason: "stop" }));
+      }
+    } else {
+      writeSse(res, chatCompletionChunk({ id, created, model, delta: { role: "assistant" } }));
+      await streamCursorText(prompt, model, apiKey, (delta) => {
+        writeSse(res, chatCompletionChunk({ id, created, model, delta: { content: delta } }));
+      });
+      writeSse(res, chatCompletionChunk({ id, created, model, delta: {}, finishReason: "stop" }));
+    }
+
     res.end("data: [DONE]\n\n");
     return;
   }
@@ -287,6 +330,7 @@ async function handleChatCompletions(req, res, apiKey) {
       model,
       content: await runCursorText(prompt, model, apiKey),
       prompt,
+      hasTools,
     }),
   );
 }
@@ -437,6 +481,30 @@ export function createProxyServer() {
 
       if (req.method === "GET" && url.pathname === "/health") {
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/workspace") {
+        requireApiKey(req);
+        sendJson(res, 200, { workspace: WORKSPACE_DIR, files: listWorkspaceFiles() });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname.startsWith("/workspace/")) {
+        requireApiKey(req);
+        const rel = decodeURIComponent(url.pathname.slice("/workspace/".length));
+        const target = resolve(WORKSPACE_DIR, rel);
+        if (target !== WORKSPACE_DIR && !target.startsWith(WORKSPACE_DIR + "/")) {
+          sendJson(res, 403, openAiError("Forbidden", "invalid_request_error"));
+          return;
+        }
+        if (!existsSync(target) || !statSync(target).isFile()) {
+          sendJson(res, 404, openAiError("File not found", "invalid_request_error", "not_found"));
+          return;
+        }
+        addBaseHeaders(res);
+        res.writeHead(200, { "content-type": "application/octet-stream" });
+        createReadStream(target).pipe(res);
         return;
       }
 

@@ -4,8 +4,18 @@ OpenAI- and Anthropic-compatible wrapper around Cursor SDK.
 
 ## Run
 
+### Docker (recommended)
+
 ```bash
 docker compose up --build
+```
+
+By default the Cursor agent creates files under `./workspace/` (a subdirectory
+of this project). To have files appear in **your** project directory instead,
+set `CURSOR_WORKSPACE` to that path before starting:
+
+```bash
+CURSOR_WORKSPACE=/path/to/your/project docker compose up --build
 ```
 
 For server deployment, upload this project or `cursor-openai-proxy-deploy.tar.gz`,
@@ -14,18 +24,26 @@ then run:
 ```bash
 tar -xzf cursor-openai-proxy-deploy.tar.gz
 cd cursor-openai-proxy-deploy
-docker compose up -d --build
-```
-
-Optional runtime overrides:
-
-```bash
-PORT=3001 CURSOR_WORKSPACE=/srv/cursor-workspace docker compose up -d --build
+CURSOR_WORKSPACE=/srv/cursor-workspace docker compose up -d --build
 ```
 
 Runtime state is stored in the `cursor-state` Docker volume under `/data`.
-The mounted workspace defaults to `./workspace`. API keys are not stored by the
-service; pass the Cursor key on each request.
+API keys are not stored by the service; pass the Cursor key on each request.
+
+### Local (no Docker)
+
+```bash
+npm start
+```
+
+Copy `.env.example` to `.env` and set `CURSOR_WORKDIR` to the directory where
+generated files should appear:
+
+```bash
+cp .env.example .env
+# edit .env: set CURSOR_WORKDIR=/path/to/your/project
+npm start
+```
 
 Call it with any OpenAI-compatible client:
 
@@ -54,9 +72,35 @@ curl http://localhost:3000/v1/messages \
 Anthropic requests may use `x-api-key: <cursor-api-key>` or the same bearer
 token header.
 
+### Retrieving generated files (remote server)
+
+When the proxy runs on a remote server, files created by the Cursor agent stay
+on that server. Use the workspace endpoints to list and download them:
+
+```bash
+# List all files in the workspace
+curl -H "Authorization: Bearer crsr_xxx" http://server:3000/workspace
+
+# Download a single file
+curl -H "Authorization: Bearer crsr_xxx" http://server:3000/workspace/path/to/file.py \
+  -o file.py
+```
+
+Sync everything to the current local directory:
+
+```bash
+KEY=crsr_xxx SERVER=http://server:3000
+for f in $(curl -s -H "Authorization: Bearer $KEY" $SERVER/workspace | jq -r '.files[]'); do
+  mkdir -p "$(dirname "$f")"
+  curl -s -H "Authorization: Bearer $KEY" "$SERVER/workspace/$f" -o "$f"
+done
+```
+
 Supported endpoints:
 
 - `GET /health`
+- `GET /workspace` — list files in the agent workspace (requires auth)
+- `GET /workspace/{path}` — download a file from the workspace (requires auth)
 - `GET /v1/models`
 - `GET /v1/models/:model`
 - `POST /v1/chat/completions`
