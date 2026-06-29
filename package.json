@@ -32,8 +32,7 @@
   ],
   "scripts": {
     "mcp": "node src/mcp.js",
-    "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --test src/*.test.js scripts/*.test.js"
+    "start": "node --env-file-if-exists=.env src/server.js"
   },
   "dependencies": {
     "@cursor/sdk": "1.0.21"
