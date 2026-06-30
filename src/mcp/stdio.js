@@ -25,7 +25,10 @@ export function startMcpStdio() {
     });
   }
 
-  const protocol = createMcpProtocol({ requestClient });
+  const protocol = createMcpProtocol({
+    requestClient,
+    notify: (method, params) => send({ jsonrpc: "2.0", method, params }),
+  });
   const lines = createInterface({ input: process.stdin });
 
   lines.on("line", async (line) => {

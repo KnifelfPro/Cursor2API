@@ -141,3 +141,68 @@ test("cursorx direct tool skips routing, model listing, and workflow wrapping", 
   assert.equal(reply.result.content[0].text, "direct answer");
   assert.deepEqual(calls, [{ prompt: "hello", model: "gpt-5.5", apiKey: "key", workspace: "/tmp/work" }]);
 });
+
+test("cursorx direct tool emits progress notifications while the run is still active", async () => {
+  const notifications = [];
+  let resolveStreamStarted;
+  let allowFinish;
+  const streamStarted = new Promise((resolve) => {
+    resolveStreamStarted = resolve;
+  });
+  const finishRun = new Promise((resolve) => {
+    allowFinish = resolve;
+  });
+
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    run: async () => "non-streaming answer",
+    stream: async (prompt, model, apiKey, onDelta, workspace) => {
+      assert.equal(prompt, "hello");
+      assert.equal(model, "default");
+      assert.equal(apiKey, "key");
+      assert.equal(workspace, "/tmp/work");
+      onDelta("partial");
+      resolveStreamStarted();
+      await finishRun;
+      onDelta(" answer");
+    },
+    notify: (method, params) => {
+      notifications.push({ method, params });
+    },
+  });
+
+  const pendingReply = protocol.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "cursor_agent_direct",
+      arguments: { prompt: "hello" },
+      _meta: { progressToken: "run-1" },
+    },
+  });
+
+  await Promise.race([
+    streamStarted,
+    pendingReply.then(() => assert.fail("tool call returned before streaming started")),
+  ]);
+
+  assert.deepEqual(notifications, [
+    {
+      method: "notifications/progress",
+      params: { progressToken: "run-1", progress: 1, message: "partial" },
+    },
+  ]);
+
+  allowFinish();
+  const reply = await pendingReply;
+
+  assert.equal(reply.result.isError, false);
+  assert.equal(reply.result.content[0].text, "partial answer");
+  assert.deepEqual(notifications.at(-1), {
+    method: "notifications/progress",
+    params: { progressToken: "run-1", progress: 2, message: " answer" },
+  });
+});

@@ -140,10 +140,21 @@ async function defaultRunCursorText(...args) {
   return runCursorText(...args);
 }
 
+async function defaultStreamCursorText(...args) {
+  const { streamCursorText } = await import("../core/cursor-runtime.js");
+  return streamCursorText(...args);
+}
+
 async function defaultListModels(apiKey) {
   const { Cursor } = await import("@cursor/sdk");
   const models = await Cursor.models.list({ apiKey });
   return models.length ? models : [{ id: DEFAULT_MODEL }];
+}
+
+function requestProgressToken(params) {
+  const token = params?._meta?.progressToken;
+  if (typeof token === "string" || Number.isInteger(token)) return token;
+  return undefined;
 }
 
 export function createMcpProtocol({
@@ -151,20 +162,53 @@ export function createMcpProtocol({
   model = DEFAULT_MODEL,
   cwd = () => process.cwd(),
   run = defaultRunCursorText,
+  stream = defaultStreamCursorText,
   listModels = defaultListModels,
   requestClient,
+  notify,
 } = {}) {
   let clientHasRoots = false;
 
+  function createProgressEmitter(params) {
+    const progressToken = requestProgressToken(params);
+    if (progressToken === undefined || typeof notify !== "function") return undefined;
+
+    let progress = 0;
+    return (message) => {
+      if (!message) return;
+      notify("notifications/progress", {
+        progressToken,
+        progress: ++progress,
+        message: String(message),
+      });
+    };
+  }
+
+  async function runStreamingText(prompt, requestedModel, apiKey, workspace, onDelta) {
+    let text = "";
+    await stream(
+      prompt,
+      requestedModel,
+      apiKey,
+      (delta) => {
+        text += delta;
+        onDelta(delta);
+      },
+      workspace,
+    );
+    return text;
+  }
+
   // ponytail: starting an agent on an unavailable model fails the run; retry once
   // on the literal "default" model so a bad selection does not lose the task.
-  async function runWithFallback(prompt, requestedModel, apiKey, workspace) {
+  async function runWithFallback(prompt, requestedModel, apiKey, workspace, onDelta) {
+    const runner = onDelta ? runStreamingText : run;
     try {
-      return await run(prompt, requestedModel, apiKey, workspace);
+      return await runner(prompt, requestedModel, apiKey, workspace, onDelta);
     } catch (error) {
       if (requestedModel === FALLBACK_MODEL) throw error;
       process.stderr.write(`cursor_agent: model ${requestedModel} unavailable, falling back to ${FALLBACK_MODEL}\n`);
-      return await run(prompt, FALLBACK_MODEL, apiKey, workspace);
+      return await runner(prompt, FALLBACK_MODEL, apiKey, workspace, onDelta);
     }
   }
 
@@ -190,8 +234,9 @@ export function createMcpProtocol({
     try {
       const defaultModel = typeof args.model === "string" && args.model ? args.model : model;
       const workspace = await currentWorkspace();
+      const emitProgress = createProgressEmitter(params);
       // /cursorx: skip routing and workflow prompt wrapping.
-      if (direct) return toolText(await run(prompt, defaultModel, apiKey, workspace));
+      if (direct) return toolText(await runWithFallback(prompt, defaultModel, apiKey, workspace, emitProgress));
 
       // /cursor: default model picks self, delegate, or up to MAX_PARALLEL_AGENTS workers.
       const models = await listModels(apiKey);
@@ -207,11 +252,11 @@ export function createMcpProtocol({
             result: await runWithFallback(workerPrompt(agent.task), agent.model, apiKey, workspace),
           })),
         );
-        return toolText(await runWithFallback(synthesisPrompt(prompt, results), defaultModel, apiKey, workspace));
+        return toolText(await runWithFallback(synthesisPrompt(prompt, results), defaultModel, apiKey, workspace, emitProgress));
       }
 
       const selectedModel = decision.mode === "delegate" ? decision.model : defaultModel;
-      return toolText(await runWithFallback(workerPrompt(decision.task), selectedModel, apiKey, workspace));
+      return toolText(await runWithFallback(workerPrompt(decision.task), selectedModel, apiKey, workspace, emitProgress));
     } catch (error) {
       return toolError(error.message || "Cursor agent failed");
     }
