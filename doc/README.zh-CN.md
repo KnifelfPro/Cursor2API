@@ -1,7 +1,6 @@
 # Cursor2API
 
-为 Claude Code、Codex、OpenCode、Gemini CLI、Cursor、Hermes 提供 MCP 能力，
-安装后可在这些 coding agent CLI 中直接使用 `/cursor` 和 `/cursorx` 命令调用
+为 coding agent 提供 MCP server 和命令集成，让它们可以通过 Cursor2API 调用
 Cursor 模型处理任务。
 
 [English README](../README.md)
@@ -67,21 +66,46 @@ curl -fsSL https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/
 curl -L -o install-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/install-mcp.cmd && install-mcp.cmd
 ```
 
-脚本会扫描 Claude Code、Codex、OpenCode、Gemini CLI、Cursor、Hermes 的常见配置路径，
-选择需要的工具后，**一次完成** MCP server 配置和 `/cursor`/`/cursorx` 命令文件安装。
+和 Superpowers 一样，不同 harness 的安装方式不同。先安装共享的 MCP 包，再按
+客户端真实支持的方式安装对应集成。
 
-### 按工具单独安装（marketplace）
+脚本会扫描 Codex、OpenCode、Gemini CLI、Cursor、Hermes 的常见 MCP 配置路径，
+以及 Claude Code 的命令目录。支持稳定配置文件的客户端会写入 MCP server 配置；
+`/cursor` 和 `/cursorx` 命令文件只会安装到 Claude Code 和 OpenCode。
 
-如果只需要安装到特定工具，先添加 marketplace 再安装插件。MCP 包仍需提前安装。
+### 按 harness 安装
+
+只有 Claude Code 和 OpenCode 会通过本安装器获得真正的 `/cursor` 与 `/cursorx`
+命令文件。其他客户端使用 MCP tool、原生扩展、prompt 或 Cursor rule。
 
 **Claude Code**
 
-```bash
-claude plugin marketplace add KnifelfPro/cursor2api-marketplace
-claude plugin install cursor2api@cursor2api
+在 Claude Code 内运行：
+
+```text
+/plugin marketplace add KnifelfPro/cursor2api-marketplace
+/plugin install cursor2api@cursor2api
 ```
 
+插件会安装 Claude 命令文件和 `cursor2api` MCP 配置。仍需提前确保
+`cursor2api-mcp` 在 `PATH` 中，并设置好 `CURSOR_API_KEY`。
+
 命令：`/cursor2api:cursor` 和 `/cursor2api:cursorx`
+
+如果需要不带命名空间的本地命令，可以运行 `cursor2api-mcp-install` 并选择
+`claude`；它会把 `/cursor` 和 `/cursorx` 复制到 `~/.claude/commands`。
+
+**OpenCode**
+
+```bash
+cursor2api-mcp-install
+# 选择 "opencode"
+```
+
+这会写入 `~/.config/opencode/opencode.json`，并把命令文件写入
+`~/.config/opencode/commands`。
+
+命令：`/cursor <任务> [模型]` / `/cursorx <任务> [模型]`
 
 **Codex**
 
@@ -90,7 +114,7 @@ codex plugin marketplace add KnifelfPro/cursor2api-marketplace
 codex plugin add cursor2api@cursor2api
 ```
 
-命令：`Use cursor to <任务> [模型]` / `Use cursorx to <任务> [模型]`
+用法：`Use cursor to <任务> [模型]` / `Use cursorx to <任务> [模型]`
 
 **Gemini CLI**
 
@@ -99,21 +123,7 @@ gemini extensions install https://github.com/KnifelfPro/cursor2api-marketplace -
 gemini extensions config cursor2api CURSOR_API_KEY
 ```
 
-命令：`/cursor <任务> [模型]` / `/cursorx <任务> [模型]`
-
-**OpenCode**
-
-```bash
-mkdir -p ~/.config/opencode/commands
-curl -fsSL https://raw.githubusercontent.com/KnifelfPro/cursor2api-marketplace/main/opencode/commands/cursor.md \
-  -o ~/.config/opencode/commands/cursor.md
-curl -fsSL https://raw.githubusercontent.com/KnifelfPro/cursor2api-marketplace/main/opencode/commands/cursorx.md \
-  -o ~/.config/opencode/commands/cursorx.md
-```
-
-然后运行 `cursor2api-mcp-install` 并选择 OpenCode 配置 MCP。
-
-命令：`/cursor <任务> [模型]` / `/cursorx <任务> [模型]`
+使用 Gemini CLI 的扩展命令和 MCP 集成。
 
 **Cursor**
 
@@ -121,7 +131,8 @@ curl -fsSL https://raw.githubusercontent.com/KnifelfPro/cursor2api-marketplace/m
 MCP 配置：把 marketplace 中的 `cursor/mcp.json` 里的 `mcpServers.cursor2api`
 手动合并进 `~/.cursor/mcp.json`（不要直接覆盖已有文件）。
 
-命令：在 Cursor Agent 中输入 `/cursor ...` 或 `/cursorx ...`。
+用法：在 Cursor Agent 中让它使用 `/cursor ...` 或 `/cursorx ...`；rule 会把请求
+路由到 MCP tool。
 
 **Hermes**
 
@@ -143,7 +154,7 @@ curl -fsSL https://raw.githubusercontent.com/KnifelfPro/cursor2api-marketplace/m
 
 如果工具未被自动检测，可手动配置：
 
-**JSON 格式**（Claude Code、OpenCode、Gemini CLI、Cursor 等）
+**JSON 格式**（使用 `mcpServers` JSON 的客户端，例如 OpenCode、Gemini CLI、Cursor）
 
 ```json
 {

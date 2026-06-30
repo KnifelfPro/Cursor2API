@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { discoverTargets, mergeHermesYaml } from "../scripts/install-mcp.mjs";
+import { discoverTargets, installTarget, mergeHermesYaml } from "../scripts/install-mcp.mjs";
 import { removeHermesYaml } from "../scripts/uninstall-mcp.mjs";
 
 test("installer discovers Hermes config target", () => {
@@ -21,6 +23,45 @@ test("installer discovers Hermes config target", () => {
   assert.equal(hermes.kind, "hermes-yaml");
   assert.equal(hermes.configPath, join(home, ".hermes", "config.yaml"));
   assert.equal(hermes.found, true);
+});
+
+test("installer discovers Claude command target without renumbering existing targets", () => {
+  const home = "/tmp/home";
+  const existing = new Set([join(home, ".claude")]);
+  const targets = discoverTargets({
+    home,
+    appData: join(home, "AppData", "Roaming"),
+    localAppData: join(home, "AppData", "Local"),
+    platform: "darwin",
+    existsSync: (path) => existing.has(path),
+  });
+  const claude = targets.find((target) => target.id === "claude");
+
+  assert.equal(targets[0].id, "codex");
+  assert.equal(claude.kind, "commands-only");
+  assert.equal(claude.commandDir, join(home, ".claude", "commands"));
+  assert.equal(claude.found, true);
+});
+
+test("installer writes OpenCode MCP config and slash command files", () => {
+  const home = mkdtempSync(join(tmpdir(), "cursor2api-install-"));
+  try {
+    const target = discoverTargets({
+      home,
+      appData: join(home, "AppData", "Roaming"),
+      localAppData: join(home, "AppData", "Local"),
+      platform: "darwin",
+      existsSync,
+    }).find((item) => item.id === "opencode");
+
+    installTarget(target, "crsr_test");
+
+    assert.match(readFileSync(target.configPath, "utf8"), /cursor2api-mcp/);
+    assert.match(readFileSync(join(target.commandDir, "cursor.md"), "utf8"), /cursor_agent/);
+    assert.match(readFileSync(join(target.commandDir, "cursorx.md"), "utf8"), /cursor_agent_direct/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("installer merges cursor2api into Hermes mcp_servers", () => {

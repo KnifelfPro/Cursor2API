@@ -1,7 +1,7 @@
 # Cursor2API
 
-MCP server that gives Claude Code, Codex, OpenCode, Gemini CLI, Cursor, and
-Hermes `/cursor` and `/cursorx` commands backed by Cursor models.
+MCP server and command integrations that let coding agents call Cursor models
+through Cursor2API.
 
 [中文说明](doc/README.zh-CN.md)
 
@@ -67,23 +67,50 @@ curl -fsSL https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/
 curl -L -o install-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/install-mcp.cmd && install-mcp.cmd
 ```
 
-The installer scans common config paths for Claude Code, Codex, OpenCode,
-Gemini CLI, Cursor, and Hermes. Select any combination and it configures both
-the MCP server and the `/cursor`/`/cursorx` command files in one pass.
+Like Superpowers, installation differs by harness. Install the shared MCP
+package once, then install the integration your client actually supports.
 
-### Per-tool install (marketplace)
+The installer scans common config paths for Codex, OpenCode, Gemini CLI,
+Cursor, Hermes, and Claude Code command files. It writes MCP config where the
+client has a stable config file. It installs `/cursor` and `/cursorx` command
+files only for Claude Code and OpenCode.
 
-If you prefer to install per tool, add the marketplace first, then install the
-plugin. The MCP package is still required.
+### Per-harness install
+
+Only Claude Code and OpenCode get real `/cursor` and `/cursorx` command files
+from this installer. Other clients use MCP tools, native extensions, prompts,
+or Cursor rules.
 
 **Claude Code**
 
-```bash
-claude plugin marketplace add KnifelfPro/cursor2api-marketplace
-claude plugin install cursor2api@cursor2api
+Run these inside Claude Code:
+
+```text
+/plugin marketplace add KnifelfPro/cursor2api-marketplace
+/plugin install cursor2api@cursor2api
 ```
 
+The plugin installs the Claude command files and the `cursor2api` MCP config.
+It still expects `cursor2api-mcp` to be available on `PATH` and
+`CURSOR_API_KEY` to be set.
+
 Commands: `/cursor2api:cursor` and `/cursor2api:cursorx`
+
+If you need un-namespaced local commands instead, run `cursor2api-mcp-install`
+and select `claude`; that copies `/cursor` and `/cursorx` into
+`~/.claude/commands`.
+
+**OpenCode**
+
+```bash
+cursor2api-mcp-install
+# select "opencode"
+```
+
+This writes `~/.config/opencode/opencode.json` and command files under
+`~/.config/opencode/commands`.
+
+Commands: `/cursor <task> [model]` / `/cursorx <task> [model]`
 
 **Codex**
 
@@ -92,7 +119,7 @@ codex plugin marketplace add KnifelfPro/cursor2api-marketplace
 codex plugin add cursor2api@cursor2api
 ```
 
-Commands: `Use cursor to <task> [model]` / `Use cursorx to <task> [model]`
+Usage: `Use cursor to <task> [model]` / `Use cursorx to <task> [model]`
 
 **Gemini CLI**
 
@@ -101,21 +128,7 @@ gemini extensions install https://github.com/KnifelfPro/cursor2api-marketplace -
 gemini extensions config cursor2api CURSOR_API_KEY
 ```
 
-Commands: `/cursor <task> [model]` / `/cursorx <task> [model]`
-
-**OpenCode**
-
-```bash
-mkdir -p ~/.config/opencode/commands
-curl -fsSL https://raw.githubusercontent.com/KnifelfPro/cursor2api-marketplace/main/opencode/commands/cursor.md \
-  -o ~/.config/opencode/commands/cursor.md
-curl -fsSL https://raw.githubusercontent.com/KnifelfPro/cursor2api-marketplace/main/opencode/commands/cursorx.md \
-  -o ~/.config/opencode/commands/cursorx.md
-```
-
-Then run `cursor2api-mcp-install` and select OpenCode to configure MCP.
-
-Commands: `/cursor <task> [model]` / `/cursorx <task> [model]`
+Use Gemini CLI's extension commands and MCP integration.
 
 **Cursor**
 
@@ -124,7 +137,8 @@ source in Cursor. For MCP, merge `cursor/mcp.json` from the marketplace into
 `~/.cursor/mcp.json` (do not overwrite, merge the `mcpServers.cursor2api`
 entry).
 
-Commands: type `/cursor ...` or `/cursorx ...` in Cursor Agent.
+Usage: ask Cursor Agent to use `/cursor ...` or `/cursorx ...`; the rule routes
+that request to the MCP tool.
 
 **Hermes**
 
@@ -147,7 +161,7 @@ Commands: `/cursor <task> [model]` / `/cursorx <task> [model]`
 
 For any client not covered above, add `cursor2api-mcp` by hand:
 
-**JSON** (Claude Code, OpenCode, Gemini CLI, Cursor …)
+**JSON** (clients that use `mcpServers` JSON, such as OpenCode, Gemini CLI, and Cursor)
 
 ```json
 {

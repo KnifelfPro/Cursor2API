@@ -1,14 +1,25 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const SERVER_NAME = "cursor2api";
 const JSON_SERVER = {
   command: "cursor2api-mcp",
   args: [],
+};
+const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const COMMAND_SOURCES = {
+  claude: [
+    join(PACKAGE_ROOT, "plugin", "claude", ".claude", "commands", "cursor.md"),
+    join(PACKAGE_ROOT, "plugin", "claude", ".claude", "commands", "cursorx.md"),
+  ],
+  opencode: [
+    join(PACKAGE_ROOT, "plugin", "opencode", "command", "cursor.md"),
+    join(PACKAGE_ROOT, "plugin", "opencode", "command", "cursorx.md"),
+  ],
 };
 export const CODEX_START = "# cursor2api-mcp:start";
 export const CODEX_END = "# cursor2api-mcp:end";
@@ -69,6 +80,9 @@ export function discoverTargets({
       paths: isWindows
         ? [join(appData, "opencode", "opencode.json"), join(home, ".opencode.json")]
         : [join(home, ".config", "opencode", "opencode.json"), join(home, ".opencode.json")],
+      commandDirs: isWindows
+        ? [join(appData, "opencode", "commands")]
+        : [join(home, ".config", "opencode", "commands")],
     },
     {
       id: "gemini",
@@ -82,6 +96,12 @@ export function discoverTargets({
       kind: "hermes-yaml",
       paths: [join(home, ".hermes", "config.yaml")],
     },
+    {
+      id: "claude",
+      name: "Claude Code commands",
+      kind: "commands-only",
+      paths: [join(home, ".claude", "commands")],
+    },
   ];
 
   const roots = [home, appData, localAppData];
@@ -91,6 +111,7 @@ export function discoverTargets({
       ...target,
       index: index + 1,
       configPath,
+      commandDir: target.commandDirs ? firstPath(target.commandDirs, exists, roots) : target.kind === "commands-only" ? configPath : undefined,
       found: target.paths.some((path) => exists(path) || (exists(dirname(path)) && !roots.includes(dirname(path)))),
     };
   });
@@ -227,7 +248,25 @@ function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function installTarget(target, apiKey) {
+function installCommandFiles(target) {
+  const sources = COMMAND_SOURCES[target.id];
+  if (!sources) return false;
+
+  mkdirSync(target.commandDir, { recursive: true });
+  for (const source of sources) {
+    const destination = join(target.commandDir, basename(source));
+    backup(destination);
+    copyFileSync(source, destination);
+  }
+  return true;
+}
+
+export function installTarget(target, apiKey) {
+  if (target.kind === "commands-only") {
+    installCommandFiles(target);
+    return;
+  }
+
   if (target.kind === "codex-toml") {
     mkdirSync(dirname(target.configPath), { recursive: true });
     const current = existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "";
@@ -249,6 +288,7 @@ function installTarget(target, apiKey) {
     target.configPath,
     target.kind === "opencode-json" ? mergeOpenCodeJson(current, apiKey) : mergeMcpServersJson(current, apiKey),
   );
+  installCommandFiles(target);
 }
 
 async function ask(question) {
@@ -265,7 +305,7 @@ export async function main() {
   if (!apiKey) throw new Error("Cursor API key is required");
 
   const targets = discoverTargets();
-  console.log("\nDetected MCP targets:");
+  console.log("\nDetected install targets:");
   for (const target of targets) {
     const marker = target.found ? "found" : "default";
     console.log(`  ${target.index}. ${target.name} (${target.id}) [${marker}] -> ${target.configPath}`);
@@ -277,7 +317,11 @@ export async function main() {
 
   for (const target of selected) {
     installTarget(target, apiKey);
-    console.log(`Installed ${SERVER_NAME} for ${target.name}: ${target.configPath}`);
+    const label = target.kind === "commands-only" ? "/cursor commands" : SERVER_NAME;
+    console.log(`Installed ${label} for ${target.name}: ${target.configPath}`);
+    if (target.commandDir && target.kind !== "commands-only") {
+      console.log(`Installed /cursor commands for ${target.name}: ${target.commandDir}`);
+    }
   }
 }
 
