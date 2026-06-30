@@ -53,7 +53,7 @@ npm start
 curl http://localhost:3000/v1/chat/completions \
   -H "content-type: application/json" \
   -H "authorization: Bearer crsr_xxx" \
-  -d '{"model":"composer-2","messages":[{"role":"user","content":"hello"}]}'
+  -d '{"model":"default","messages":[{"role":"user","content":"hello"}]}'
 ```
 
 服务不会保存 API key。请把 Cursor API key 当作 OpenAI API key 使用：
@@ -68,7 +68,7 @@ curl http://localhost:3000/v1/messages \
   -H "content-type: application/json" \
   -H "x-api-key: crsr_xxx" \
   -H "anthropic-version: 2023-06-01" \
-  -d '{"model":"composer-2","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}'
+  -d '{"model":"default","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}'
 ```
 
 Anthropic 请求可以使用 `x-api-key: <cursor-api-key>`，也可以使用同样的
@@ -97,7 +97,7 @@ curl -L -o install-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2A
 ```
 
 安装脚本会询问 Cursor API key，扫描常见 Codex、Clash、OpenCode、Cursor、
-Gemini 配置目录，然后允许输入 `1`、`1,3,5`、`cursor gemini` 或 `all`
+Gemini、Hermes 配置目录，然后允许输入 `1`、`1,3,5`、`cursor gemini` 或 `all`
 来单选或批量安装。
 
 ```json
@@ -127,7 +127,7 @@ Windows `cmd`：
 curl -L -o uninstall-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/uninstall-mcp.cmd && uninstall-mcp.cmd
 ```
 
-卸载脚本会扫描相同的 Codex、Clash、OpenCode、Cursor、Gemini 配置目录，从你选择的
+卸载脚本会扫描相同的 Codex、Clash、OpenCode、Cursor、Gemini、Hermes 配置目录，从你选择的
 目标里移除 `cursor2api` 条目（会先写 `.bak` 备份），然后执行
 `npm uninstall -g cursor2api-mcp`。
 
@@ -162,7 +162,7 @@ roots，则回退到 MCP server 进程的当前工作目录。
 ```json
 {
   "prompt": "修复当前项目里失败的测试",
-  "model": "composer-2"
+  "model": "default"
 }
 ```
 

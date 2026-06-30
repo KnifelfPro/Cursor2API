@@ -12,6 +12,8 @@ const JSON_SERVER = {
 };
 export const CODEX_START = "# cursor2api-mcp:start";
 export const CODEX_END = "# cursor2api-mcp:end";
+export const HERMES_START = CODEX_START;
+export const HERMES_END = CODEX_END;
 
 function homePath(...parts) {
   return join(process.env.HOME || process.env.USERPROFILE || ".", ...parts);
@@ -73,6 +75,12 @@ export function discoverTargets({
       name: "Gemini CLI",
       kind: "mcp-json",
       paths: [join(home, ".gemini", "settings.json")],
+    },
+    {
+      id: "hermes",
+      name: "Hermes",
+      kind: "hermes-yaml",
+      paths: [join(home, ".hermes", "config.yaml")],
     },
   ];
 
@@ -152,6 +160,56 @@ export function mergeCodexToml(content, apiKey) {
   return `${base}${base ? "\n\n" : ""}${block}`;
 }
 
+function regexEscape(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hermesManagedPattern() {
+  return new RegExp(`^\\s*${regexEscape(HERMES_START)}\\n[\\s\\S]*?^\\s*${regexEscape(HERMES_END)}\\n?`, "m");
+}
+
+function yamlString(value) {
+  return JSON.stringify(String(value));
+}
+
+function hermesYamlBlock(apiKey) {
+  return [
+    `  ${HERMES_START}`,
+    `  ${SERVER_NAME}:`,
+    '    command: "cursor2api-mcp"',
+    "    args: []",
+    "    env:",
+    `      CURSOR_API_KEY: ${yamlString(apiKey)}`,
+    `  ${HERMES_END}`,
+  ].join("\n");
+}
+
+export function mergeHermesYaml(content, apiKey) {
+  const base = String(content || "").replace(hermesManagedPattern(), "").trimEnd();
+  const block = hermesYamlBlock(apiKey);
+  if (!base) return `mcp_servers:\n${block}\n`;
+
+  const lines = base.split(/\r?\n/);
+  const inlineIndex = lines.findIndex((line) => /^mcp_servers:\s*(?:\{\}|null)\s*(?:#.*)?$/.test(line));
+  if (inlineIndex >= 0) {
+    lines.splice(inlineIndex, 1, "mcp_servers:", block);
+    return `${lines.join("\n").trimEnd()}\n`;
+  }
+
+  const index = lines.findIndex((line) => /^mcp_servers:\s*(?:#.*)?$/.test(line));
+  if (index >= 0) {
+    lines.splice(index + 1, 0, block);
+    return `${lines.join("\n").trimEnd()}\n`;
+  }
+
+  return `${base}\n\nmcp_servers:\n${block}\n`;
+}
+
+export function removeHermesYaml(content) {
+  const base = String(content || "").replace(hermesManagedPattern(), "").trimEnd();
+  return base ? `${base}\n` : "";
+}
+
 function readJson(path) {
   if (!existsSync(path)) return {};
   return JSON.parse(readFileSync(path, "utf8") || "{}");
@@ -175,6 +233,14 @@ function installTarget(target, apiKey) {
     const current = existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "";
     backup(target.configPath);
     writeFileSync(target.configPath, mergeCodexToml(current, apiKey));
+    return;
+  }
+
+  if (target.kind === "hermes-yaml") {
+    mkdirSync(dirname(target.configPath), { recursive: true });
+    const current = existsSync(target.configPath) ? readFileSync(target.configPath, "utf8") : "";
+    backup(target.configPath);
+    writeFileSync(target.configPath, mergeHermesYaml(current, apiKey));
     return;
   }
 

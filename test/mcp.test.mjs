@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createMcpProtocol, MCP_PROTOCOL_VERSION, MCP_TOOL } from "../src/mcp.js";
-import { parseJsonObject, routingDecision } from "../src/mcp/routing.js";
+import { createRoutingPrompt, parseJsonObject, routingDecision } from "../src/mcp/routing.js";
 
 test("routing helpers parse fenced JSON and fall back to known models", () => {
   assert.deepEqual(parseJsonObject('```json\n{"mode":"delegate","model":"missing","task":"do it"}\n```'), {
@@ -11,20 +11,34 @@ test("routing helpers parse fenced JSON and fall back to known models", () => {
     task: "do it",
   });
   assert.deepEqual(
-    routingDecision('{"mode":"delegate","model":"missing","task":"do it"}', "composer-2", "original", [
-      { id: "composer-2" },
+    routingDecision('{"mode":"delegate","model":"missing","task":"do it"}', "default", "original", [
+      { id: "default" },
     ]),
-    { mode: "delegate", model: "composer-2", task: "do it" },
+    { mode: "delegate", model: "default", task: "do it" },
   );
+});
+
+test("routing prompt tells the router to choose models by task difficulty", () => {
+  const prompt = createRoutingPrompt({
+    task: "work",
+    workspace: "/tmp/work",
+    tools: [MCP_TOOL],
+    models: [{ id: "default" }, { id: "composer-2" }],
+  });
+
+  assert.match(prompt, /task difficulty/i);
+  assert.match(prompt, /model capability/i);
+  assert.match(prompt, /low or medium difficulty/i);
+  assert.match(prompt, /do not delegate or parallelize/i);
 });
 
 test("MCP protocol handles initialize, ping, tools/list, and injected tool calls", async () => {
   const calls = [];
   const protocol = createMcpProtocol({
     apiKey: "key",
-    model: "composer-2",
+    model: "default",
     cwd: () => "E:/Project/Cursor2API",
-    listModels: async () => [{ id: "composer-2" }],
+    listModels: async () => [{ id: "default" }],
     run: async (prompt, model, apiKey, workspace) => {
       calls.push({ prompt, model, apiKey, workspace });
       return calls.length === 1 ? '{"mode":"self","task":"answer"}' : "final answer";

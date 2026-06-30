@@ -5,7 +5,7 @@ import { createRoutingPrompt, routingDecision, synthesisPrompt, workerPrompt } f
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const MCP_TOOL_NAME = "cursor_agent";
 
-const DEFAULT_MODEL = process.env.CURSOR_MODEL || "composer-2";
+const DEFAULT_MODEL = process.env.CURSOR_MODEL || "default";
 const FALLBACK_MODEL = "default";
 
 export const MCP_TOOL = {

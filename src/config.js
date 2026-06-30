@@ -5,7 +5,7 @@ export function port() {
 }
 
 export function defaultModel() {
-  return process.env.CURSOR_MODEL || "composer-2";
+  return process.env.CURSOR_MODEL || "default";
 }
 
 export function defaultEmbeddingModel() {

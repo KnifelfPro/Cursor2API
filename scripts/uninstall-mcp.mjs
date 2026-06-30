@@ -3,7 +3,15 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 
-import { CODEX_END, CODEX_START, discoverTargets, isMainEntry, selectTargets, SERVER_NAME } from "./install-mcp.mjs";
+import {
+  CODEX_END,
+  CODEX_START,
+  discoverTargets,
+  isMainEntry,
+  removeHermesYaml as removeHermesYamlBlock,
+  selectTargets,
+  SERVER_NAME,
+} from "./install-mcp.mjs";
 
 export function removeMcpServersJson(config) {
   if (!config?.mcpServers || !(SERVER_NAME in config.mcpServers)) return config;
@@ -21,6 +29,10 @@ export function removeCodexToml(content) {
   const pattern = new RegExp(`${CODEX_START}[\\s\\S]*?${CODEX_END}\\n?`, "m");
   const base = String(content || "").replace(pattern, "").trimEnd();
   return base ? `${base}\n` : "";
+}
+
+export function removeHermesYaml(content) {
+  return removeHermesYamlBlock(content);
 }
 
 function readJson(path) {
@@ -45,6 +57,15 @@ function uninstallTarget(target) {
   if (target.kind === "codex-toml") {
     const current = readFileSync(target.configPath, "utf8");
     const next = removeCodexToml(current);
+    if (next === current) return false;
+    backup(target.configPath);
+    writeFileSync(target.configPath, next);
+    return true;
+  }
+
+  if (target.kind === "hermes-yaml") {
+    const current = readFileSync(target.configPath, "utf8");
+    const next = removeHermesYaml(current);
     if (next === current) return false;
     backup(target.configPath);
     writeFileSync(target.configPath, next);

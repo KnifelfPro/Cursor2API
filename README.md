@@ -55,7 +55,7 @@ Call it with any OpenAI-compatible client:
 curl http://localhost:3000/v1/chat/completions \
   -H "content-type: application/json" \
   -H "authorization: Bearer crsr_xxx" \
-  -d '{"model":"composer-2","messages":[{"role":"user","content":"hello"}]}'
+  -d '{"model":"default","messages":[{"role":"user","content":"hello"}]}'
 ```
 
 The service stores no API key. Use your Cursor API key as the OpenAI API key:
@@ -70,7 +70,7 @@ curl http://localhost:3000/v1/messages \
   -H "content-type: application/json" \
   -H "x-api-key: crsr_xxx" \
   -H "anthropic-version: 2023-06-01" \
-  -d '{"model":"composer-2","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}'
+  -d '{"model":"default","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}'
 ```
 
 Anthropic requests may use `x-api-key: <cursor-api-key>` or the same bearer
@@ -101,7 +101,7 @@ curl -L -o install-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2A
 ```
 
 The installers ask for your Cursor API key, scan common Codex, Clash, OpenCode,
-Cursor, and Gemini config locations, then let you install to one target or many
+Cursor, Gemini, and Hermes config locations, then let you install to one target or many
 with input like `1`, `1,3,5`, `cursor gemini`, or `all`.
 
 ```json
@@ -132,7 +132,7 @@ Windows `cmd`:
 curl -L -o uninstall-mcp.cmd https://raw.githubusercontent.com/KnifelfPro/Cursor2API/main/scripts/uninstall-mcp.cmd && uninstall-mcp.cmd
 ```
 
-The uninstaller scans the same Codex, Clash, OpenCode, Cursor, and Gemini config
+The uninstaller scans the same Codex, Clash, OpenCode, Cursor, Gemini, and Hermes config
 locations, removes the `cursor2api` entry from the targets you select (writing a
 `.bak` first), then runs `npm uninstall -g cursor2api-mcp`.
 
@@ -168,7 +168,7 @@ Tool input:
 ```json
 {
   "prompt": "Fix the failing tests in the current project",
-  "model": "composer-2"
+  "model": "default"
 }
 ```
 

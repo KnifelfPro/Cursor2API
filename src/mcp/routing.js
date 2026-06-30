@@ -17,6 +17,7 @@ export function createRoutingPrompt({ task, workspace, tools, models }) {
   return [
     "You are the default model for a local MCP Cursor agent router.",
     "Choose whether to handle the task yourself, delegate to one listed model, or fan out to multiple listed models.",
+    "Choose models by task difficulty and model capability: use self on the default model for low or medium difficulty tasks; do not delegate or parallelize unless the task is hard enough for a stronger listed model or broad enough for independent parallel work.",
     "Return valid JSON only.",
     'Schema: {"mode":"self|delegate|parallel","model":"model-id","task":"worker task","agents":[{"model":"model-id","task":"worker task"}]}',
     `Superpowers workflow: ${SUPERPOWERS_FLOW}`,
