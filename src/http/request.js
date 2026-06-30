@@ -1,9 +1,11 @@
-import { bodyLimit } from "../config.js";
+import { bodyLimit, cursorApiKey } from "../config.js";
 import { httpError } from "../errors.js";
 import { bearerToken } from "../providers/common.js";
 
+const CURSOR_KEY_URL = "https://cursor.com/dashboard/api?section=user-keys#user-api-keys";
+
 export function requestApiKey(req) {
-  return bearerToken(req.headers.authorization);
+  return bearerToken(req.headers.authorization) || cursorApiKey();
 }
 
 export function requestAnthropicApiKey(req) {
@@ -14,13 +16,13 @@ export function requestAnthropicApiKey(req) {
 
 export function requireApiKey(req) {
   const apiKey = requestApiKey(req);
-  if (!apiKey) throw httpError(401, "Missing Authorization bearer token", "invalid_request_error");
+  if (!apiKey) throw httpError(401, `Cursor API key not configured. Get your key at: ${CURSOR_KEY_URL} — then set CURSOR_API_KEY env var or pass as Authorization: Bearer <key>`, "invalid_request_error");
   return apiKey;
 }
 
 export function requireAnthropicApiKey(req) {
   const apiKey = requestAnthropicApiKey(req);
-  if (!apiKey) throw httpError(401, "Missing x-api-key or Authorization bearer token", "authentication_error");
+  if (!apiKey) throw httpError(401, `Cursor API key not configured. Get your key at: ${CURSOR_KEY_URL} — then set CURSOR_API_KEY env var or pass as x-api-key / Authorization: Bearer <key>`, "authentication_error");
   return apiKey;
 }
 

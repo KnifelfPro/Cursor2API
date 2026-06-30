@@ -1,5 +1,16 @@
 import { resolve } from "node:path";
 
+// ponytail: module-level global — set via setCursorApiKey() before server starts, overrides env
+let _cursorApiKey = "";
+
+export function setCursorApiKey(key) {
+  _cursorApiKey = String(key || "").trim();
+}
+
+export function cursorApiKey() {
+  return _cursorApiKey || process.env.CURSOR_API_KEY || "";
+}
+
 export function port() {
   return Number.parseInt(process.env.PORT || "3000", 10);
 }

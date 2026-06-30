@@ -2,7 +2,7 @@
   "mcpServers": {
     "cursor2api": {
       "command": "cursor2api-mcp",
-      "env_vars": ["CURSOR_API_KEY", "OPENAI_API_KEY"],
+      "env_vars": ["CURSOR_API_KEY"],
       "tool_timeout_sec": 600
     }
   }

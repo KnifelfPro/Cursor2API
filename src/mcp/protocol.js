@@ -142,7 +142,7 @@ async function defaultListModels(apiKey) {
 }
 
 export function createMcpProtocol({
-  apiKey = process.env.CURSOR_API_KEY || process.env.OPENAI_API_KEY || "",
+  apiKey = process.env.CURSOR_API_KEY || "",
   model = DEFAULT_MODEL,
   cwd = () => process.cwd(),
   run = defaultRunCursorText,
@@ -176,7 +176,7 @@ export function createMcpProtocol({
   async function callTool(params = {}) {
     const direct = params.name === MCP_DIRECT_TOOL_NAME;
     if (params.name !== MCP_TOOL_NAME && !direct) return toolError(`Unknown tool: ${params.name || ""}`);
-    if (!apiKey) return toolError("Missing CURSOR_API_KEY in MCP server environment");
+    if (!apiKey) return toolError("Cursor API key not configured. Get your key at: https://cursor.com/dashboard/api?section=user-keys#user-api-keys — then set CURSOR_API_KEY in the MCP server environment or env_vars config.");
 
     const args = params.arguments || {};
     const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
