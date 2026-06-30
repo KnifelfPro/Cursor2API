@@ -26,6 +26,43 @@ Use `/cursor` for open-ended tasks where the model should choose the best
 approach. Use `/cursorx` for targeted, single-step tasks where you want a
 faster, more predictable response.
 
+### How tasks are handled
+
+**Simple task** — use `/cursorx` for a direct, fast answer:
+
+```
+you  →  /cursorx "explain this function"  →  Cursor model  →  answer
+```
+
+**Medium task** — use `/cursor` and let the router pick the best approach:
+
+```
+                              ┌─ self     → same model handles it    → answer
+you  →  /cursor "refactor"  →┤
+                              ├─ delegate → stronger model           → answer
+                              │
+                              └─ parallel → 3 agents split the work  → merge → answer
+```
+
+**Complex task** — use `/cursor` for multi-step work across the codebase:
+
+```
+you  →  /cursor "build full auth system with tests"
+          │
+          └─ router decides: orchestrate
+               │
+               ├─ create isolated worktrees (one per workstream)
+               │
+               ├─ run agents in dependency order
+               │     agent-1 (no deps)  ──────────────────────┐
+               │     agent-2 (needs 1)  ──┐                   │  parallel
+               │     agent-3 (needs 1)  ──┘                   │  where possible
+               │
+               ├─ merge all branches back to main
+               ├─ run verification  (npm test, etc.)
+               └─ synthesize final answer  →  answer
+```
+
 ```text
 /cursor Fix the failing tests
 /cursor Refactor the auth module gpt-5.5
