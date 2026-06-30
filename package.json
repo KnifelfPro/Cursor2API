@@ -1,6 +1,6 @@
 {
   "name": "cursor2api-mcp",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "license": "MIT",
   "type": "module",
   "publishConfig": {
