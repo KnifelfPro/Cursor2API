@@ -1,3 +1,4 @@
+/** HTTP response helpers: CORS, JSON/SSE envelopes, OpenAI vs Anthropic error shapes. */
 import { anthropicError, anthropicStreamEvent } from "../providers/anthropic.js";
 import { openAiError } from "../providers/openai.js";
 
@@ -27,6 +28,7 @@ export function sendError(res, error) {
   sendJson(res, statusCode, openAiError(error.message || "Internal server error", type));
 }
 
+/** Mid-stream failures emit an Anthropic `error` SSE event instead of a JSON body. */
 export function sendAnthropicError(res, error) {
   const statusCode = error.statusCode || 500;
   const type = error.type || (statusCode === 401 ? "authentication_error" : "api_error");

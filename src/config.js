@@ -1,3 +1,4 @@
+/** Runtime config from env vars; setCursorApiKey() overrides CURSOR_API_KEY for embedded use. */
 import { resolve } from "node:path";
 
 // ponytail: module-level global — set via setCursorApiKey() before server starts, overrides env
@@ -39,6 +40,7 @@ export function workspaceDir() {
   return resolve(process.env.CURSOR_WORKDIR || process.cwd());
 }
 
+// Isolated HOME for sandboxed runs; empty means use the process environment as-is.
 export function cursorHomeDir() {
   return process.env.CURSOR_HOME_DIR
     ? resolve(process.env.CURSOR_HOME_DIR)

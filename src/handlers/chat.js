@@ -1,3 +1,4 @@
+/** OpenAI chat/completions: converts messages to a Cursor prompt, maps stream + tool_calls back. */
 import { randomUUID } from "node:crypto";
 
 import { defaultModel } from "../config.js";

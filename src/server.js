@@ -1,3 +1,4 @@
+/** HTTP proxy entry: re-exports runtime helpers and starts the server when run directly. */
 import { pathToFileURL } from "node:url";
 
 import { port } from "./config.js";

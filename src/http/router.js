@@ -1,3 +1,7 @@
+/**
+ * HTTP proxy: maps OpenAI / Anthropic API routes to the Cursor SDK runtime.
+ * Pass `services.runtime` to inject mocks in tests.
+ */
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -16,6 +20,7 @@ import { log } from "../logger.js";
 import { anthropicError } from "../providers/anthropic.js";
 import { openAiError } from "../providers/openai.js";
 
+// Handlers call runtime.* only — tests swap these without touching Cursor SDK.
 const defaultRuntime = {
   runText: runCursorText,
   streamText: streamCursorText,
@@ -51,6 +56,7 @@ export function createProxyServer(services = {}) {
       }
 
       const url = new URL(req.url || "/", "http://localhost");
+      // Anthropic clients use x-api-key / anthropic-version; same /v1/models path differs by shape.
       anthropicRequest = isAnthropicRequest(req, url.pathname);
 
       if (req.method === "GET" && url.pathname === "/health") {

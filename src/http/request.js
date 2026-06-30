@@ -1,3 +1,4 @@
+/** Request auth resolution and bounded JSON body reads. */
 import { bodyLimit, cursorApiKey } from "../config.js";
 import { httpError } from "../errors.js";
 import { bearerToken } from "../providers/common.js";
@@ -26,6 +27,7 @@ export function requireAnthropicApiKey(req) {
   return apiKey;
 }
 
+/** Same path (/v1/models) serves OpenAI or Anthropic shapes; headers disambiguate. */
 export function isAnthropicRequest(req, pathname) {
   return (
     pathname === "/v1/messages" ||

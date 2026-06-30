@@ -1,3 +1,7 @@
+/**
+ * MCP JSON-RPC handler: cursor_agent (routed) vs cursor_agent_direct (single-shot).
+ * Routed calls ask the default model how to fan out, then run worker/synthesis prompts.
+ */
 import { fileURLToPath } from "node:url";
 
 import { createRoutingPrompt, routingDecision, synthesisPrompt, workerPrompt } from "./routing.js";
@@ -59,6 +63,7 @@ export const MCP_DIRECT_PROMPT = {
   description: "Run /cursorx <task> [model] directly through the cursor_agent_direct MCP tool.",
 };
 
+// Trailing token in /cursor input is treated as model id when it matches Cursor model naming.
 export function looksLikeModelToken(value) {
   return /^(?:default|[a-z][a-z0-9._:-]*\d[a-z0-9._:-]*)$/i.test(String(value || ""));
 }
@@ -185,8 +190,10 @@ export function createMcpProtocol({
     try {
       const defaultModel = typeof args.model === "string" && args.model ? args.model : model;
       const workspace = await currentWorkspace();
+      // /cursorx: skip routing and workflow prompt wrapping.
       if (direct) return toolText(await run(prompt, defaultModel, apiKey, workspace));
 
+      // /cursor: default model picks self, delegate, or up to MAX_PARALLEL_AGENTS workers.
       const models = await listModels(apiKey);
       const tools = [MCP_TOOL, MCP_DIRECT_TOOL];
       const decisionText = await runWithFallback(createRoutingPrompt({ task: prompt, workspace, tools, models }), defaultModel, apiKey, workspace);

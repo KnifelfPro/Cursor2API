@@ -1,3 +1,7 @@
+/**
+ * Cursor SDK agent lifecycle shared by HTTP handlers and MCP tools.
+ * Each request gets an ephemeral JsonlLocalAgentStore; slots and timeouts are global.
+ */
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
@@ -28,6 +32,7 @@ async function createLocalAgentStore(storeDir) {
   return new JsonlLocalAgentStore(storeDir);
 }
 
+// Global cap so parallel HTTP/MCP callers cannot exhaust local Cursor agents.
 function acquireRequestSlot() {
   if (activeRequests >= maxConcurrent()) throw httpError(503, "Too many concurrent requests", "server_error");
   activeRequests++;
@@ -37,8 +42,10 @@ function releaseRequestSlot() {
   activeRequests--;
 }
 
+/** Run a prompt to completion and return assistant text; always tears down agent + store. */
 export async function runCursorText(prompt, model, apiKey, cwd = workspaceDir()) {
   acquireRequestSlot();
+  // One UUID-scoped JsonlLocalAgentStore per call; removed in finally so disk does not grow.
   const storeDir = join(cursorStoreDir(), randomUUID());
   let agent;
   const timer = setTimeout(() => agent?.close(), requestTimeoutMs());
@@ -56,6 +63,7 @@ export async function runCursorText(prompt, model, apiKey, cwd = workspaceDir())
   }
 }
 
+/** Stream assistant deltas via onDelta; emits only new text since the last event. */
 export async function streamCursorText(prompt, model, apiKey, onDelta, cwd = workspaceDir()) {
   acquireRequestSlot();
   const storeDir = join(cursorStoreDir(), randomUUID());

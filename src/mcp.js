@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/** MCP stdio entry: sets default store dir, re-exports protocol, starts on direct execution. */
 
 import { fileURLToPath } from "node:url";
 

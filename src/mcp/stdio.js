@@ -1,3 +1,4 @@
+/** MCP stdio transport: one JSON-RPC message per line on stdin/stdout. */
 import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
@@ -36,6 +37,7 @@ export function startMcpStdio() {
       return;
     }
 
+    // Responses to server-initiated roots/list requests (no method field).
     if (!message.method && message.id != null) {
       const pendingRequest = pending.get(String(message.id));
       if (pendingRequest) {

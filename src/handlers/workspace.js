@@ -1,3 +1,4 @@
+/** Read-only workspace file listing and download (path traversal guarded). */
 import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
@@ -17,6 +18,7 @@ export function listWorkspaceFiles(dir = workspaceDir(), base = workspaceDir()) 
   return files;
 }
 
+// Block path traversal: resolved target must stay under workspace root.
 function isInsideWorkspace(root, target) {
   const rel = relative(root, target);
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));

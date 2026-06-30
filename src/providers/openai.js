@@ -1,5 +1,10 @@
+/**
+ * OpenAI API ↔ plain-text prompt conversion and response shaping.
+ * Cursor only sees text; tools are described inline and parsed from JSON in the reply.
+ */
 import { contentToText, estimateTokens, tokenUsage } from "./common.js";
 
+/** Flatten chat messages (incl. tool_calls / tool results) into role: text lines. */
 export function messagesToPrompt(messages) {
   if (!Array.isArray(messages)) return "";
 
@@ -88,14 +93,14 @@ export function assistantText(event) {
     .join("");
 }
 
+// Cursor SDK expects cumulative assistant text; slice out only the new suffix for SSE.
 export function assistantDelta(event, emittedText) {
   const text = assistantText(event);
   const delta = text.startsWith(emittedText) ? text.slice(emittedText.length) : text;
   return { text, delta };
 }
 
-// Parse JSON tool_calls or function_call the model embedded in its text response.
-// Tries the raw text, then a ```json ... ``` fence.
+/** Parse tool_calls / function_call JSON the model inlined in plain text (see chatPrompt). */
 export function extractToolCalls(content) {
   if (!content) return null;
   const candidates = [content.trim()];
@@ -271,6 +276,7 @@ function embeddingInputItems(input) {
   return [contentToText(input)];
 }
 
+/** Deterministic local embedding stub (not a real model); satisfies OpenAI API shape for clients that require it. */
 export function localEmbedding(text, dimensions) {
   const vector = Array.from({ length: dimensions }, () => 0);
   const tokens = String(text || "")

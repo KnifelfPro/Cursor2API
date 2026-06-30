@@ -1,3 +1,4 @@
+/** Local hash embedding endpoint; no Cursor SDK call. */
 import { defaultEmbeddingDimensions, defaultEmbeddingModel } from "../config.js";
 import { httpError } from "../errors.js";
 import { readJson } from "../http/request.js";

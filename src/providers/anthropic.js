@@ -1,3 +1,4 @@
+/** Anthropic Messages API ↔ plain-text prompt and SSE event builders. */
 import { contentToText, estimateTokens } from "./common.js";
 
 const EPOCH = new Date(0).toISOString();

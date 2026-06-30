@@ -1,3 +1,4 @@
+/** OpenAI Responses API (/v1/responses) adapter. */
 import { randomUUID } from "node:crypto";
 
 import { defaultModel } from "../config.js";

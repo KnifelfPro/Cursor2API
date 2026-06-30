@@ -1,3 +1,5 @@
+/** Prompt fragments and JSON parsing for /cursor model routing (self | delegate | parallel). */
+
 export const SUPERPOWERS_FLOW = [
   "Explore project context before changing behavior.",
   "Write or update the smallest useful test before non-trivial implementation.",
@@ -11,7 +13,7 @@ export const PONYTAIL_RULES = [
   "Keep the diff small, avoid speculative scaffolding, and cap fanout.",
 ].join(" ");
 
-const MAX_PARALLEL_AGENTS = 3;
+const MAX_PARALLEL_AGENTS = 3; // cap fanout from routingDecision
 
 export function createRoutingPrompt({ task, workspace, tools, models }) {
   return [
@@ -40,6 +42,7 @@ export function synthesisPrompt(task, results) {
   );
 }
 
+/** Best-effort JSON object parse; accepts raw text or ```json fences from model output. */
 export function parseJsonObject(text) {
   const raw = String(text || "").trim();
   const fenced = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
@@ -63,6 +66,7 @@ export function knownModel(model, modelIds, fallback) {
   return modelIds.has(model) ? model : fallback;
 }
 
+/** Normalize router JSON into a safe decision; unknown models map to defaultModel. */
 export function routingDecision(text, defaultModel, task, models) {
   const parsed = parseJsonObject(text);
   const modelIds = new Set(models.map(modelId).filter(Boolean));

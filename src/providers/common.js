@@ -1,3 +1,5 @@
+/** Shared text extraction, auth parsing, and rough token estimates (chars / 4). */
+
 export function contentToText(content) {
   if (content == null) return "";
   if (typeof content === "string") return content;

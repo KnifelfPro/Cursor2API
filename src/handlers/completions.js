@@ -1,3 +1,4 @@
+/** Legacy completions API handler; same Cursor runtime as chat, simpler prompt shape. */
 import { randomUUID } from "node:crypto";
 
 import { defaultModel } from "../config.js";

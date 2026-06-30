@@ -1,3 +1,4 @@
+/** Anthropic /v1/messages proxy over the shared Cursor text runtime. */
 import { randomUUID } from "node:crypto";
 
 import { defaultModel } from "../config.js";

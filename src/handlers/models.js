@@ -1,3 +1,4 @@
+/** Model list endpoints; injects a synthetic embedding model for OpenAI-compatible clients. */
 import { defaultEmbeddingModel } from "../config.js";
 import { httpError } from "../errors.js";
 import { anthropicModelResponse, anthropicModelsResponse } from "../providers/anthropic.js";
@@ -6,6 +7,7 @@ import { cursorModelsToOpenAi, openAiModel } from "../providers/openai.js";
 export async function listModels(runtime, apiKey) {
   const models = await runtime.models(apiKey);
   const response = cursorModelsToOpenAi(models);
+  // Clients probe /v1/embeddings via models list; Cursor has no embedding model id.
   if (!response.data.some((model) => model.id === defaultEmbeddingModel())) {
     response.data.push(openAiModel(defaultEmbeddingModel(), "cursor-local"));
   }
