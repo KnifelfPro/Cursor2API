@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "cursor2api": {
+      "command": "cursor2api-mcp",
+      "env": {
+        "CURSOR_API_KEY": "crsr_xxx"
+      }
+    }
+  }
+}
+

@@ -1,0 +1,26 @@
+{
+  "name": "cursor2api-codex",
+  "version": "0.1.0",
+  "description": "Run Cursor models from Codex through cursor2api MCP.",
+  "author": {
+    "name": "Cursor2API"
+  },
+  "license": "MIT",
+  "keywords": ["cursor", "mcp", "codex"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Cursor2API",
+    "shortDescription": "Run Cursor models from Codex through MCP.",
+    "longDescription": "Adds the cursor2api MCP server and guidance for /cursor routed tasks and /cursorx direct tasks with an optional trailing model id.",
+    "developerName": "Cursor2API",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Use cursor2api to fix failing tests",
+      "Route this through Cursor gpt-5.5",
+      "Use cursorx to call Cursor directly"
+    ],
+    "brandColor": "#111827"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "cursor2api",
+  "interface": {
+    "displayName": "Cursor2API"
+  },
+  "plugins": [
+    {
+      "name": "cursor2api-codex",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cursor2api-codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
+

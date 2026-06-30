@@ -1,0 +1,21 @@
+---
+description: Route /cursor-style requests through cursor2api MCP.
+globs:
+alwaysApply: false
+---
+
+When the user asks to use `/cursor`, Cursor2API, or a specific Cursor model,
+use the `cursor_agent` MCP tool from the `cursor2api` server.
+
+Parse `/cursor <task> [model]` this way:
+
+- If the final whitespace-separated token looks like a model id, such as
+  `gpt-5.5`, `composer-2`, `claude-4-sonnet`, or `default`, remove it from the
+  task and pass it as `model`.
+- Otherwise pass the whole request as `prompt` and use `model: "default"`.
+- Return only the MCP tool result unless the task is empty.
+
+When the user asks to use `/cursorx`, use `cursor_agent_direct` instead. It
+uses the same argument format but skips model screening, routing, parallel
+agents, and local workflow prompt wrapping.
+

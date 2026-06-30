@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createMcpProtocol, MCP_PROTOCOL_VERSION, MCP_TOOL } from "../src/mcp.js";
+import {
+  createCursorPromptText,
+  createMcpProtocol,
+  MCP_DIRECT_PROMPT,
+  MCP_DIRECT_TOOL,
+  MCP_PROMPT,
+  MCP_PROTOCOL_VERSION,
+  MCP_TOOL,
+  splitCursorCommandInput,
+} from "../src/mcp.js";
 import { createRoutingPrompt, parseJsonObject, routingDecision } from "../src/mcp/routing.js";
 
 test("routing helpers parse fenced JSON and fall back to known models", () => {
@@ -32,6 +41,12 @@ test("routing prompt tells the router to choose models by task difficulty", () =
   assert.match(prompt, /do not delegate or parallelize/i);
 });
 
+test("cursor prompt parses an optional trailing model", () => {
+  assert.deepEqual(splitCursorCommandInput("你好 gpt-5.5"), { prompt: "你好", model: "gpt-5.5" });
+  assert.deepEqual(splitCursorCommandInput("你好"), { prompt: "你好", model: "default" });
+  assert.match(createCursorPromptText({ input: "修复测试 composer-2" }), /"model": "composer-2"/);
+});
+
 test("MCP protocol handles initialize, ping, tools/list, and injected tool calls", async () => {
   const calls = [];
   const protocol = createMcpProtocol({
@@ -50,7 +65,7 @@ test("MCP protocol handles initialize, ping, tools/list, and injected tool calls
     id: 1,
     result: {
       protocolVersion: MCP_PROTOCOL_VERSION,
-      capabilities: { tools: { listChanged: false } },
+      capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
       serverInfo: { name: "cursor-openai-proxy", title: "Cursor OpenAI Proxy", version: "0.1.0" },
       instructions: "Configure CURSOR_API_KEY in the MCP client. Tool calls use MCP roots, falling back to the server process cwd.",
     },
@@ -63,8 +78,21 @@ test("MCP protocol handles initialize, ping, tools/list, and injected tool calls
   assert.deepEqual(await protocol.handle({ jsonrpc: "2.0", id: 3, method: "tools/list" }), {
     jsonrpc: "2.0",
     id: 3,
-    result: { tools: [MCP_TOOL] },
+    result: { tools: [MCP_TOOL, MCP_DIRECT_TOOL] },
   });
+  assert.deepEqual(await protocol.handle({ jsonrpc: "2.0", id: 30, method: "prompts/list" }), {
+    jsonrpc: "2.0",
+    id: 30,
+    result: { prompts: [MCP_PROMPT, MCP_DIRECT_PROMPT] },
+  });
+  const promptReply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 31,
+    method: "prompts/get",
+    params: { name: "cursor", arguments: { input: "hello gpt-5.5" } },
+  });
+  assert.match(promptReply.result.messages[0].content.text, /"prompt": "hello"/);
+  assert.match(promptReply.result.messages[0].content.text, /"model": "gpt-5.5"/);
 
   const reply = await protocol.handle({
     jsonrpc: "2.0",
@@ -75,4 +103,41 @@ test("MCP protocol handles initialize, ping, tools/list, and injected tool calls
   assert.equal(reply.result.isError, false);
   assert.equal(reply.result.content[0].text, "final answer");
   assert.equal(calls.length, 2);
+});
+
+test("cursorx direct tool skips routing, model listing, and workflow wrapping", async () => {
+  const calls = [];
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    listModels: async () => {
+      throw new Error("should not list models");
+    },
+    run: async (prompt, model, apiKey, workspace) => {
+      calls.push({ prompt, model, apiKey, workspace });
+      return "direct answer";
+    },
+  });
+
+  const promptReply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "prompts/get",
+    params: { name: "cursorx", arguments: { input: "hello gpt-5.5" } },
+  });
+  assert.match(promptReply.result.messages[0].content.text, /cursor_agent_direct/);
+  assert.match(promptReply.result.messages[0].content.text, /"prompt": "hello"/);
+  assert.match(promptReply.result.messages[0].content.text, /"model": "gpt-5.5"/);
+
+  const reply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: { name: "cursor_agent_direct", arguments: { prompt: "hello", model: "gpt-5.5" } },
+  });
+
+  assert.equal(reply.result.isError, false);
+  assert.equal(reply.result.content[0].text, "direct answer");
+  assert.deepEqual(calls, [{ prompt: "hello", model: "gpt-5.5", apiKey: "key", workspace: "/tmp/work" }]);
 });

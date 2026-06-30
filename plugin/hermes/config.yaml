@@ -1,0 +1,7 @@
+mcp_servers:
+  cursor2api:
+    command: "cursor2api-mcp"
+    args: []
+    env:
+      CURSOR_API_KEY: "${CURSOR_API_KEY}"
+

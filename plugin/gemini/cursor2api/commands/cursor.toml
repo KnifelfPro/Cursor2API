@@ -1,0 +1,21 @@
+description = "Run a task through cursor2api MCP. Usage: /cursor <task> [model]"
+prompt = """
+Use the cursor2api MCP tool `cursor_agent`.
+
+Raw command arguments:
+
+```text
+{{args}}
+```
+
+Parse the raw arguments as `/cursor <task> [model]`.
+
+- If the final whitespace-separated token looks like a model id, such as
+  `gpt-5.5`, `composer-2`, `claude-4-sonnet`, or `default`, remove it from the
+  task and pass it as `model`.
+- Otherwise pass the entire raw argument string as `prompt` and use `model:
+  "default"`.
+- Call the MCP tool exactly once with `{ "prompt": "...", "model": "..." }`.
+- Return only the tool result unless the task is empty.
+"""
+

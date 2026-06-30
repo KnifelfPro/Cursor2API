@@ -18,6 +18,7 @@
     "scripts/uninstall-mcp.cmd",
     "scripts/uninstall-mcp.mjs",
     "scripts/uninstall-mcp.sh",
+    "doc",
     "src/anthropic.js",
     "src/config.js",
     "src/core/cursor-runtime.js",
@@ -44,11 +45,11 @@
     "src/providers/openai.js",
     "src/server.js",
     "README.md",
-    "README.zh-CN.md",
     "LICENSE",
     "Dockerfile",
     "docker-compose.yml",
     ".dockerignore",
+    "plugin",
     ".env.example"
   ],
   "scripts": {

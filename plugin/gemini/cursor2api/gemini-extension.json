@@ -1,0 +1,24 @@
+{
+  "name": "cursor2api",
+  "version": "0.1.0",
+  "description": "Run Cursor models from Gemini CLI through cursor2api MCP.",
+  "settings": [
+    {
+      "name": "Cursor API Key",
+      "description": "Cursor API key used by cursor2api-mcp.",
+      "envVar": "CURSOR_API_KEY",
+      "sensitive": true
+    }
+  ],
+  "mcpServers": {
+    "cursor2api": {
+      "command": "cursor2api-mcp",
+      "env": {
+        "CURSOR_API_KEY": "$CURSOR_API_KEY"
+      },
+      "timeout": 600000
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}
+
