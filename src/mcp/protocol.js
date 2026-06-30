@@ -168,6 +168,7 @@ export function createMcpProtocol({
   notify,
 } = {}) {
   let clientHasRoots = false;
+  let clientCanElicit = false;
 
   function createProgressEmitter(params) {
     const progressToken = requestProgressToken(params);
@@ -222,6 +223,33 @@ export function createMcpProtocol({
     return cwd();
   }
 
+  async function approveRun(prompt, workspace) {
+    if (!clientCanElicit || typeof requestClient !== "function") return true;
+
+    const result = await requestClient("elicitation/create", {
+      message: [
+        "Cursor agent wants to run in this workspace.",
+        `Workspace: ${workspace}`,
+        "It may read or modify files and run commands while completing the task.",
+        `Task: ${prompt}`,
+      ].join("\n"),
+      requestedSchema: {
+        type: "object",
+        properties: {
+          allow: {
+            type: "boolean",
+            title: "Allow Cursor agent run",
+            description: "Approve this Cursor agent run.",
+          },
+        },
+        required: ["allow"],
+        additionalProperties: false,
+      },
+    });
+
+    return result?.action === "accept" && result?.content?.allow === true;
+  }
+
   async function callTool(params = {}) {
     const direct = params.name === MCP_DIRECT_TOOL_NAME;
     if (params.name !== MCP_TOOL_NAME && !direct) return toolError(`Unknown tool: ${params.name || ""}`);
@@ -234,6 +262,7 @@ export function createMcpProtocol({
     try {
       const defaultModel = typeof args.model === "string" && args.model ? args.model : model;
       const workspace = await currentWorkspace();
+      if (!(await approveRun(prompt, workspace))) return toolError("Cursor agent run declined by user");
       const emitProgress = createProgressEmitter(params);
       // /cursorx: skip routing and workflow prompt wrapping.
       if (direct) return toolText(await runWithFallback(prompt, defaultModel, apiKey, workspace, emitProgress));
@@ -272,6 +301,7 @@ export function createMcpProtocol({
 
       if (message.method === "initialize") {
         clientHasRoots = Boolean(message.params?.capabilities?.roots);
+        clientCanElicit = Boolean(message.params?.capabilities?.elicitation);
         return response(message.id, {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: {

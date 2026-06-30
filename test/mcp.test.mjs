@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  clientRequestTimeoutMs,
   createCursorPromptText,
   createMcpProtocol,
   MCP_DIRECT_PROMPT,
@@ -12,6 +13,11 @@ import {
   splitCursorCommandInput,
 } from "../src/mcp.js";
 import { createRoutingPrompt, parseJsonObject, routingDecision } from "../src/mcp/routing.js";
+
+test("MCP stdio gives human elicitation requests enough time", () => {
+  assert.equal(clientRequestTimeoutMs("roots/list"), 1000);
+  assert.equal(clientRequestTimeoutMs("elicitation/create"), 300000);
+});
 
 test("routing helpers parse fenced JSON and fall back to known models", () => {
   assert.deepEqual(parseJsonObject('```json\n{"mode":"delegate","model":"missing","task":"do it"}\n```'), {
@@ -205,4 +211,78 @@ test("cursorx direct tool emits progress notifications while the run is still ac
     method: "notifications/progress",
     params: { progressToken: "run-1", progress: 2, message: " answer" },
   });
+});
+
+test("MCP protocol asks the client for approval before starting a supported tool run", async () => {
+  const clientRequests = [];
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    run: async () => {
+      throw new Error("should not run when approval is declined");
+    },
+    requestClient: async (method, params) => {
+      clientRequests.push({ method, params });
+      return { action: "decline" };
+    },
+  });
+
+  await protocol.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { capabilities: { elicitation: {} } },
+  });
+
+  const reply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: { name: "cursor_agent_direct", arguments: { prompt: "hello" } },
+  });
+
+  assert.equal(reply.result.isError, true);
+  assert.match(reply.result.content[0].text, /declined/i);
+  assert.equal(clientRequests.length, 1);
+  assert.equal(clientRequests[0].method, "elicitation/create");
+  assert.match(clientRequests[0].params.message, /Cursor agent/i);
+  assert.equal(clientRequests[0].params.requestedSchema.properties.allow.type, "boolean");
+});
+
+test("MCP protocol starts a supported tool run after client approval", async () => {
+  const clientRequests = [];
+  const calls = [];
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    run: async (prompt, model, apiKey, workspace) => {
+      calls.push({ prompt, model, apiKey, workspace });
+      return "approved answer";
+    },
+    requestClient: async (method, params) => {
+      clientRequests.push({ method, params });
+      return { action: "accept", content: { allow: true } };
+    },
+  });
+
+  await protocol.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { capabilities: { elicitation: {} } },
+  });
+
+  const reply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: { name: "cursor_agent_direct", arguments: { prompt: "hello" } },
+  });
+
+  assert.equal(reply.result.isError, false);
+  assert.equal(reply.result.content[0].text, "approved answer");
+  assert.equal(clientRequests.length, 1);
+  assert.deepEqual(calls, [{ prompt: "hello", model: "default", apiKey: "key", workspace: "/tmp/work" }]);
 });

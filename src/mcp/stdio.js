@@ -3,7 +3,12 @@ import { realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 
+import { requestTimeoutMs } from "../config.js";
 import { createMcpProtocol } from "./protocol.js";
+
+export function clientRequestTimeoutMs(method) {
+  return method === "elicitation/create" ? requestTimeoutMs() : 1000;
+}
 
 export function startMcpStdio() {
   const pending = new Map();
@@ -20,7 +25,7 @@ export function startMcpStdio() {
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new Error(`${method} timed out`));
-      }, 1000);
+      }, clientRequestTimeoutMs(method));
       pending.set(id, { resolve, reject, timer });
     });
   }
