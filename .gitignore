@@ -4,6 +4,7 @@ node_modules/
 workspace/
 .cursor-home/
 .cursor-sdk-store/
+.cursor2api-worktrees/
 .codegraph/
 docs/superpowers/
 *.test.js

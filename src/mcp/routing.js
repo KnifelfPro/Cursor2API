@@ -1,4 +1,6 @@
-/** Prompt fragments and JSON parsing for /cursor model routing (self | delegate | parallel). */
+/** Prompt fragments and JSON parsing for /cursor model routing (self | delegate | parallel | orchestrate). */
+
+import { normalizeOrchestration } from "./orchestration/decision.js";
 
 export const SUPERPOWERS_FLOW = [
   "Explore project context before changing behavior.",
@@ -18,10 +20,12 @@ const MAX_PARALLEL_AGENTS = 3; // cap fanout from routingDecision
 export function createRoutingPrompt({ task, workspace, tools, models }) {
   return [
     "You are the default model for a local MCP Cursor agent router.",
-    "Choose whether to handle the task yourself, delegate to one listed model, or fan out to multiple listed models.",
+    "Choose whether to handle the task yourself, delegate to one listed model, fan out to multiple listed models, or orchestrate a complex local implementation inside the MCP server.",
     "Choose models by task difficulty and model capability: use self on the default model for low or medium difficulty tasks; do not delegate or parallelize unless the task is hard enough for a stronger listed model or broad enough for independent parallel work.",
+    "Use orchestrate only for complex tasks that need 1 to 10 subagents, git worktrees, dependency ordering, local merges, and final local verification.",
+    "The MCP client only invokes this tool and displays the final result; it does not run subagents, create worktrees, merge branches, or run tests.",
     "Return valid JSON only.",
-    'Schema: {"mode":"self|delegate|parallel","model":"model-id","task":"worker task","agents":[{"model":"model-id","task":"worker task"}]}',
+    'Schema: {"mode":"self|delegate|parallel|orchestrate","model":"model-id","task":"worker task","agents":[{"model":"model-id","task":"worker task"}],"orchestration":{"summary":"reason","agents":[{"id":"agent-1","model":"model-id","task":"worker task","phase":"implement","dependsOn":[],"worktree":"chain-a"}],"mergeOrder":["chain-a"],"verify":["npm test"]}}',
     `Superpowers workflow: ${SUPERPOWERS_FLOW}`,
     `Ponytail rules: ${PONYTAIL_RULES}`,
     `Context: ${JSON.stringify({ workspace, models, tools, task })}`,
@@ -86,6 +90,13 @@ export function routingDecision(text, defaultModel, task, models) {
       task: typeof agent?.task === "string" && agent.task.trim() ? agent.task.trim() : task,
     }));
     return { mode: "parallel", agents };
+  }
+
+  if (parsed?.mode === "orchestrate") {
+    return {
+      mode: "orchestrate",
+      orchestration: normalizeOrchestration(parsed.orchestration || parsed, { defaultModel, task, models }),
+    };
   }
 
   return { mode: "self", model: fallback, task };

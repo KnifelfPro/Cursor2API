@@ -47,6 +47,53 @@ test("routing prompt tells the router to choose models by task difficulty", () =
   assert.match(prompt, /do not delegate or parallelize/i);
 });
 
+test("routing prompt offers server-internal orchestration without client-side subagents", () => {
+  const prompt = createRoutingPrompt({
+    task: "implement a complex local feature",
+    workspace: "/tmp/work",
+    tools: [MCP_TOOL, MCP_DIRECT_TOOL],
+    models: [{ id: "default" }, { id: "composer-2" }],
+  });
+
+  assert.match(prompt, /orchestrate/i);
+  assert.match(prompt, /1 to 10 subagents/i);
+  assert.match(prompt, /inside the MCP server/i);
+  assert.match(prompt, /client only invokes/i);
+  assert.match(prompt, /worktree/i);
+});
+
+test("routing decision accepts orchestrate plans and falls back unknown models", () => {
+  const decision = routingDecision(
+    JSON.stringify({
+      mode: "orchestrate",
+      orchestration: {
+        summary: "complex local implementation",
+        agents: [
+          {
+            id: "agent-1",
+            model: "missing-model",
+            task: "change one module",
+            phase: "implement",
+            dependsOn: [],
+            worktree: "chain-a",
+          },
+        ],
+        mergeOrder: ["chain-a"],
+        verify: [],
+      },
+    }),
+    "default",
+    "original task",
+    [{ id: "default" }, { id: "composer-2" }],
+  );
+
+  assert.equal(decision.mode, "orchestrate");
+  assert.equal(decision.orchestration.agents.length, 1);
+  assert.equal(decision.orchestration.agents[0].model, "default");
+  assert.equal(decision.orchestration.agents[0].task, "change one module");
+  assert.deepEqual(decision.orchestration.verify, ["npm test"]);
+});
+
 test("cursor prompt parses an optional trailing model", () => {
   assert.deepEqual(splitCursorCommandInput("你好 gpt-5.5"), { prompt: "你好", model: "gpt-5.5" });
   assert.deepEqual(splitCursorCommandInput("你好"), { prompt: "你好", model: "default" });
@@ -146,6 +193,47 @@ test("cursorx direct tool skips routing, model listing, and workflow wrapping", 
   assert.equal(reply.result.isError, false);
   assert.equal(reply.result.content[0].text, "direct answer");
   assert.deepEqual(calls, [{ prompt: "hello", model: "gpt-5.5", apiKey: "key", workspace: "/tmp/work" }]);
+});
+
+test("cursor_agent executes orchestrate decisions inside the MCP server", async () => {
+  const calls = [];
+  const orchestrationCalls = [];
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    listModels: async () => [{ id: "default" }],
+    run: async (prompt, model, apiKey, workspace) => {
+      calls.push({ prompt, model, apiKey, workspace });
+      return JSON.stringify({
+        mode: "orchestrate",
+        orchestration: {
+          summary: "complex local work",
+          agents: [{ id: "agent-1", model: "default", task: "edit locally", dependsOn: [], worktree: "chain-a" }],
+          verify: ["npm test"],
+        },
+      });
+    },
+    orchestrate: async (input) => {
+      orchestrationCalls.push(input);
+      return "orchestrated answer";
+    },
+  });
+
+  const reply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "cursor_agent", arguments: { prompt: "complex work" } },
+  });
+
+  assert.equal(reply.result.isError, false);
+  assert.equal(reply.result.content[0].text, "orchestrated answer");
+  assert.equal(calls.length, 1);
+  assert.equal(orchestrationCalls.length, 1);
+  assert.equal(orchestrationCalls[0].task, "complex work");
+  assert.equal(orchestrationCalls[0].workspace, "/tmp/work");
+  assert.equal(orchestrationCalls[0].orchestration.agents[0].task, "edit locally");
 });
 
 test("cursorx direct tool emits progress notifications while the run is still active", async () => {

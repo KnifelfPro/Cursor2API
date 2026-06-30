@@ -4,6 +4,7 @@
  */
 import { fileURLToPath } from "node:url";
 
+import { runOrchestration } from "./orchestration/runner.js";
 import { createRoutingPrompt, routingDecision, synthesisPrompt, workerPrompt } from "./routing.js";
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
@@ -151,6 +152,10 @@ async function defaultListModels(apiKey) {
   return models.length ? models : [{ id: DEFAULT_MODEL }];
 }
 
+async function defaultRunOrchestration(options) {
+  return runOrchestration(options);
+}
+
 function requestProgressToken(params) {
   const token = params?._meta?.progressToken;
   if (typeof token === "string" || Number.isInteger(token)) return token;
@@ -164,6 +169,7 @@ export function createMcpProtocol({
   run = defaultRunCursorText,
   stream = defaultStreamCursorText,
   listModels = defaultListModels,
+  orchestrate = defaultRunOrchestration,
   requestClient,
   notify,
 } = {}) {
@@ -272,6 +278,21 @@ export function createMcpProtocol({
       const tools = [MCP_TOOL, MCP_DIRECT_TOOL];
       const decisionText = await runWithFallback(createRoutingPrompt({ task: prompt, workspace, tools, models }), defaultModel, apiKey, workspace);
       const decision = routingDecision(decisionText, defaultModel, prompt, models);
+
+      if (decision.mode === "orchestrate") {
+        return toolText(
+          await orchestrate({
+            task: prompt,
+            defaultModel,
+            apiKey,
+            workspace,
+            models,
+            orchestration: decision.orchestration,
+            runWithFallback,
+            emitProgress,
+          }),
+        );
+      }
 
       if (decision.mode === "parallel") {
         const results = await Promise.all(
