@@ -118,7 +118,7 @@ test("MCP protocol handles initialize, ping, tools/list, and injected tool calls
     id: 1,
     result: {
       protocolVersion: MCP_PROTOCOL_VERSION,
-      capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
+      capabilities: { tools: { listChanged: false }, prompts: { listChanged: false }, resources: {}, completions: {}, logging: {} },
       serverInfo: { name: "cursor-openai-proxy", title: "Cursor OpenAI Proxy", version: "0.1.0" },
       instructions: "Configure CURSOR_API_KEY in the MCP client. Tool calls use MCP roots, falling back to the server process cwd.",
     },
@@ -128,6 +128,15 @@ test("MCP protocol handles initialize, ping, tools/list, and injected tool calls
     id: 2,
     result: {},
   });
+  assert.deepEqual(await protocol.handle({ jsonrpc: "2.0", id: 20, method: "logging/setLevel", params: { level: "debug" } }), {
+    jsonrpc: "2.0",
+    id: 20,
+    result: {},
+  });
+  assert.equal(
+    (await protocol.handle({ jsonrpc: "2.0", id: 21, method: "logging/setLevel", params: { level: "verbose" } })).error.code,
+    -32602,
+  );
   assert.deepEqual(await protocol.handle({ jsonrpc: "2.0", id: 3, method: "tools/list" }), {
     jsonrpc: "2.0",
     id: 3,
@@ -198,10 +207,14 @@ test("cursorx direct tool skips routing, model listing, and workflow wrapping", 
 test("cursor_agent executes orchestrate decisions inside the MCP server", async () => {
   const calls = [];
   const orchestrationCalls = [];
+  const notifications = [];
   const protocol = createMcpProtocol({
     apiKey: "key",
     model: "default",
     cwd: () => "/tmp/work",
+    notify: (method, params) => {
+      notifications.push({ method, params });
+    },
     listModels: async () => [{ id: "default" }],
     run: async (prompt, model, apiKey, workspace) => {
       calls.push({ prompt, model, apiKey, workspace });
@@ -234,6 +247,15 @@ test("cursor_agent executes orchestrate decisions inside the MCP server", async 
   assert.equal(orchestrationCalls[0].task, "complex work");
   assert.equal(orchestrationCalls[0].workspace, "/tmp/work");
   assert.equal(orchestrationCalls[0].orchestration.agents[0].task, "edit locally");
+  assert.ok(
+    notifications.some(
+      (message) =>
+        message.method === "notifications/message" &&
+        message.params.data.phase === "subagent_created" &&
+        message.params.data.model === "default" &&
+        message.params.data.task === "edit locally",
+    ),
+  );
 });
 
 test("cursorx direct tool emits progress notifications while the run is still active", async () => {
@@ -283,22 +305,208 @@ test("cursorx direct tool emits progress notifications while the run is still ac
     pendingReply.then(() => assert.fail("tool call returned before streaming started")),
   ]);
 
-  assert.deepEqual(notifications, [
-    {
-      method: "notifications/progress",
-      params: { progressToken: "run-1", progress: 1, message: "partial" },
-    },
-  ]);
+  assert.ok(
+    notifications.some(
+      (message) =>
+        message.method === "notifications/progress" &&
+        message.params.progressToken === "run-1" &&
+        message.params.message === "Starting cursor_agent_direct",
+    ),
+  );
+  assert.ok(
+    notifications.some(
+      (message) =>
+        message.method === "notifications/progress" &&
+        message.params.progressToken === "run-1" &&
+        message.params.message === "partial",
+    ),
+  );
 
   allowFinish();
   const reply = await pendingReply;
 
   assert.equal(reply.result.isError, false);
   assert.equal(reply.result.content[0].text, "partial answer");
-  assert.deepEqual(notifications.at(-1), {
-    method: "notifications/progress",
-    params: { progressToken: "run-1", progress: 2, message: " answer" },
+  assert.ok(
+    notifications.some(
+      (message) =>
+        message.method === "notifications/progress" &&
+        message.params.progressToken === "run-1" &&
+        message.params.message === "answer",
+    ),
+  );
+});
+
+test("MCP tool emits client-visible logs and progress while routed calls run", async () => {
+  const notifications = [];
+  let runCount = 0;
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    notify: (method, params) => notifications.push({ method, params }),
+    listModels: async () => [{ id: "default" }],
+    run: async (...args) => {
+      const options = args[4];
+      if (++runCount === 1) return '{"mode":"delegate","model":"default","task":"build"}';
+      options.onEvent({ type: "task", status: "running", text: "building files" });
+      return "done";
+    },
   });
+
+  const initialized = await protocol.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+  assert.deepEqual(initialized.result.capabilities.logging, {});
+
+  const reply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "cursor_agent",
+      arguments: { prompt: "work" },
+      _meta: { progressToken: "progress-1" },
+    },
+  });
+
+  assert.equal(reply.result.isError, false);
+  assert.equal(reply.result.content[0].text, "done");
+  assert.ok(notifications.some((message) => message.method === "notifications/message" && message.params.data.phase === "routing"));
+  assert.ok(notifications.some((message) => message.method === "notifications/message" && message.params.data.eventType === "task"));
+  assert.ok(notifications.some((message) => message.method === "notifications/message" && message.params.data.phase === "worker_completed"));
+  assert.ok(
+    notifications.some(
+      (message) => message.method === "notifications/progress" && message.params.progressToken === "progress-1" && message.params.message,
+    ),
+  );
+});
+
+test("parallel routing reports each sub-agent model and task", async () => {
+  const notifications = [];
+  let runCount = 0;
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    cwd: () => "/tmp/work",
+    notify: (method, params) => notifications.push({ method, params }),
+    listModels: async () => [{ id: "default" }, { id: "composer-2" }],
+    run: async () => {
+      runCount++;
+      if (runCount === 1) {
+        return JSON.stringify({
+          mode: "parallel",
+          agents: [
+            { model: "default", task: "build snake" },
+            { model: "composer-2", task: "build 2048" },
+          ],
+        });
+      }
+      return runCount === 4 ? "final" : `worker-${runCount}`;
+    },
+  });
+
+  const reply = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "cursor_agent", arguments: { prompt: "build games" } },
+  });
+
+  assert.equal(reply.result.isError, false);
+  assert.equal(reply.result.content[0].text, "final");
+  assert.ok(
+    notifications.some(
+      (message) =>
+        message.method === "notifications/message" &&
+        message.params.data.phase === "worker_started" &&
+        message.params.data.model === "default" &&
+        message.params.data.task === "build snake",
+    ),
+  );
+  assert.ok(
+    notifications.some(
+      (message) =>
+        message.method === "notifications/message" &&
+        message.params.data.phase === "worker_started" &&
+        message.params.data.model === "composer-2" &&
+        message.params.data.task === "build 2048",
+    ),
+  );
+});
+
+test("MCP protocol exposes resources and completions", async () => {
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    listModels: async () => [{ id: "default" }, { id: "composer-2" }],
+  });
+
+  const initialized = await protocol.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+  assert.deepEqual(initialized.result.capabilities.resources, {});
+  assert.deepEqual(initialized.result.capabilities.completions, {});
+
+  const listed = await protocol.handle({ jsonrpc: "2.0", id: 2, method: "resources/list" });
+  assert.ok(listed.result.resources.some((resource) => resource.uri === "cursor2api://tools"));
+
+  const read = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "resources/read",
+    params: { uri: "cursor2api://tools" },
+  });
+  assert.match(read.result.contents[0].text, /cursor_agent/);
+
+  assert.deepEqual(await protocol.handle({ jsonrpc: "2.0", id: 4, method: "resources/templates/list" }), {
+    jsonrpc: "2.0",
+    id: 4,
+    result: { resourceTemplates: [] },
+  });
+
+  const completed = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 5,
+    method: "completion/complete",
+    params: {
+      ref: { type: "ref/prompt", name: "cursor" },
+      argument: { name: "input", value: "com" },
+    },
+  });
+  assert.deepEqual(completed.result.completion, { values: ["composer-2"], total: 1, hasMore: false });
+});
+
+test("MCP cancellation aborts an active tool request without sending a response", async () => {
+  let signal;
+  const protocol = createMcpProtocol({
+    apiKey: "key",
+    model: "default",
+    listModels: async () => [{ id: "default" }],
+    run: async (...args) => {
+      const options = args[4];
+      signal = options.signal;
+      if (args[0].includes("local MCP Cursor agent router")) return '{"mode":"self","task":"work"}';
+      return new Promise((resolve) => {
+        options.signal.addEventListener("abort", () => resolve("cancelled"), { once: true });
+      });
+    },
+  });
+
+  const pending = protocol.handle({
+    jsonrpc: "2.0",
+    id: "call-1",
+    method: "tools/call",
+    params: { name: "cursor_agent", arguments: { prompt: "work" } },
+  });
+
+  while (!signal) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    await protocol.handle({
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId: "call-1", reason: "user stopped" },
+    }),
+    undefined,
+  );
+
+  assert.equal(signal.aborted, true);
+  assert.equal(await pending, undefined);
 });
 
 test("MCP protocol asks the client for approval before starting a supported tool run", async () => {
