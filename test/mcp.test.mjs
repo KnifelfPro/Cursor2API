@@ -123,6 +123,21 @@ test("MCP protocol handles initialize, ping, tools/list, and injected tool calls
       instructions: "Configure CURSOR_API_KEY in the MCP client. Tool calls use MCP roots, falling back to the server process cwd.",
     },
   });
+  // Version negotiation: echo a supported requested version, otherwise answer with the latest.
+  const older = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 10,
+    method: "initialize",
+    params: { protocolVersion: "2025-03-26" },
+  });
+  assert.equal(older.result.protocolVersion, "2025-03-26");
+  const unknown = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 11,
+    method: "initialize",
+    params: { protocolVersion: "1999-01-01" },
+  });
+  assert.equal(unknown.result.protocolVersion, MCP_PROTOCOL_VERSION);
   assert.deepEqual(await protocol.handle({ jsonrpc: "2.0", id: 2, method: "ping" }), {
     jsonrpc: "2.0",
     id: 2,

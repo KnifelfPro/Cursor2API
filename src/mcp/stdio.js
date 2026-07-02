@@ -36,6 +36,9 @@ export function startMcpStdio() {
   });
   const lines = createInterface({ input: process.stdin });
 
+  // MCP stdio shutdown: client closes stdin and expects the server to exit.
+  lines.on("close", () => process.exit(0));
+
   lines.on("line", async (line) => {
     let message;
     try {

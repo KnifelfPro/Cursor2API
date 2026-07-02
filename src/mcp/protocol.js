@@ -8,6 +8,9 @@ import { runOrchestration } from "./orchestration/runner.js";
 import { createRoutingPrompt, routingDecision, synthesisPrompt, workerPrompt } from "./routing.js";
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
+// Older revisions work too: newer notification fields are ignored by old clients,
+// and elicitation/roots are only used when the client advertises the capability.
+const SUPPORTED_PROTOCOL_VERSIONS = new Set([MCP_PROTOCOL_VERSION, "2025-03-26", "2024-11-05"]);
 export const MCP_TOOL_NAME = "cursor_agent";
 export const MCP_DIRECT_TOOL_NAME = "cursor_agent_direct";
 export const MCP_PROMPT_NAME = "cursor";
@@ -462,8 +465,16 @@ export function createMcpProtocol({
           workspace,
           models,
           orchestration: decision.orchestration,
-          runWithFallback: (nextPrompt, nextModel, nextApiKey, nextWorkspace, onDelta) =>
-            runWithFallback(nextPrompt, nextModel, nextApiKey, nextWorkspace, { report, signal, onDelta }),
+          runWithFallback: async (nextPrompt, nextModel, nextApiKey, nextWorkspace, onDelta) => {
+            const runResult = await runWithFallback(nextPrompt, nextModel, nextApiKey, nextWorkspace, { report, signal, onDelta });
+            // Abort the whole git/verify pipeline on cancel instead of feeding CANCELLED downstream.
+            if (runResult === CANCELLED) {
+              const cancelledError = new Error("Cursor run cancelled");
+              cancelledError.name = "AbortError";
+              throw cancelledError;
+            }
+            return runResult;
+          },
           emitProgress: (message) => report("orchestration", message),
         });
         if (result === CANCELLED || signal?.aborted) return CANCELLED;
@@ -527,8 +538,9 @@ export function createMcpProtocol({
       if (message.method === "initialize") {
         clientHasRoots = Boolean(message.params?.capabilities?.roots);
         clientCanElicit = Boolean(message.params?.capabilities?.elicitation);
+        const requestedVersion = message.params?.protocolVersion;
         return response(message.id, {
-          protocolVersion: MCP_PROTOCOL_VERSION,
+          protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.has(requestedVersion) ? requestedVersion : MCP_PROTOCOL_VERSION,
           capabilities: {
             tools: { listChanged: false },
             prompts: { listChanged: false },

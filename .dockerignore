@@ -9,3 +9,9 @@ workspace
 .cursor-sdk-store
 src/*.test.js
 src/.DS_Store
+test
+doc
+docs
+plugin
+scripts
+*.md

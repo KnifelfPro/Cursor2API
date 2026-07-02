@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     image: cursor-openai-proxy:latest
     restart: unless-stopped
+    # Reap zombie child processes from Cursor SDK agent runs and forward signals fast.
+    init: true
     ports:
       - "${PORT:-3000}:3000"
     logging:
